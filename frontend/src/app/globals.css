@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+:root {
+  /* ScrapMart brand colors */
+  --sm-primary: #166534;
+  --sm-primary-hover: #14532d;
+  --sm-secondary: #22c55e;
+
+  /* ScrapMart text colors */
+  --sm-text: #111827;
+  --sm-muted: #6b7280;
+
+  /* ScrapMart surfaces */
+  --sm-background: #f8fafc;
+  --sm-surface: #ffffff;
+  --sm-border: #e5e7eb;
+
+  /* ScrapMart status colors */
+  --sm-success: #16a34a;
+  --sm-warning: #d97706;
+  --sm-error: #dc2626;
+  --sm-info: #2563eb;
+
+    /* ScrapMart typography */
+  --sm-page-title-size: 2.25rem;
+  --sm-section-heading-size: 1.5rem;
+  --sm-listing-title-size: 1.125rem;
+  --sm-price-size: 1.5rem;
+  --sm-body-size: 1rem;
+  --sm-meta-size: 0.875rem;
+  --sm-label-size: 0.875rem;
+  --sm-helper-size: 0.75rem;
+}
+
+@theme inline {
+  /* Colors available as Tailwind utilities */
+  --color-primary: var(--sm-primary);
+  --color-primary-hover: var(--sm-primary-hover);
+  --color-secondary: var(--sm-secondary);
+
+  --color-text: var(--sm-text);
+  --color-muted: var(--sm-muted);
+
+  --color-background: var(--sm-background);
+  --color-surface: var(--sm-surface);
+  --color-border: var(--sm-border);
+
+  --color-success: var(--sm-success);
+  --color-warning: var(--sm-warning);
+  --color-error: var(--sm-error);
+  --color-info: var(--sm-info);
+
+    /* Typography scale */
+  --text-page-title: var(--sm-page-title-size);
+  --text-section-heading: var(--sm-section-heading-size);
+  --text-listing-title: var(--sm-listing-title-size);
+  --text-price: var(--sm-price-size);
+  --text-body: var(--sm-body-size);
+  --text-meta: var(--sm-meta-size);
+  --text-label: var(--sm-label-size);
+  --text-helper: var(--sm-helper-size);
+
+  /* Fonts already provided by Next.js */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--sm-background);
+  color: var(--sm-text);
+  font-family: var(--font-geist-sans), sans-serif;
+}

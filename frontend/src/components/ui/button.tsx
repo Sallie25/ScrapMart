@@ -3,6 +3,7 @@ import type { ButtonHTMLAttributes } from "react";
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "destructive";
   loading?: boolean;
+  block?: boolean;
 };
 
 export function Button({
@@ -12,6 +13,7 @@ export function Button({
   disabled = false,
   type = "button",
   className = "",
+  block = false,
   ...props
 }: ButtonProps) {
   const variantClasses = {
@@ -23,7 +25,7 @@ export function Button({
   return (
     <button
       type={type}
-      className={`rounded-md px-4 py-2 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${variantClasses[variant]} ${className}`}
+      className={`rounded-md px-4 py-2 font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${variantClasses[variant]} ${block ? "w-full" : ""} ${className}`}
       {...props}
       disabled={loading || disabled}
       aria-busy={loading}

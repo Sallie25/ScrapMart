@@ -12,7 +12,7 @@ export function SiteHeader() {
     <header className="border-b border-border bg-surface">
       <div className="mx-auto flex max-w-screen-2xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
         <Link
-          href="/"
+          href="/marketplace"
           className="shrink-0 text-2xl font-bold tracking-tight text-primary"
         >
           ScrapMart

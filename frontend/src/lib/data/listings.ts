@@ -11,6 +11,7 @@ export type ScrapListing = {
   verifiedVendor: boolean;
   quantity: string;
   description: string;
+  createdAt: string;
 };
 
 export const demoListings: ScrapListing[] = [
@@ -26,6 +27,7 @@ export const demoListings: ScrapListing[] = [
     verifiedVendor: true,
     quantity: "Approximately 250 kg",
     description: "Sorted aluminium scrap available for collection.",
+    createdAt: "2026-10-13T10:00:00",
   },
   {
     id: "listing-002",
@@ -39,6 +41,7 @@ export const demoListings: ScrapListing[] = [
     verifiedVendor: true,
     quantity: "Approximately 100 kg",
     description: "Collected plastic bottles, sorted and ready for pickup.",
+    createdAt: "2026-10-12T14:30:00",
   },
   {
     id: "listing-003",
@@ -52,6 +55,7 @@ export const demoListings: ScrapListing[] = [
     verifiedVendor: true,
     quantity: "Approximately 35 kg",
     description: "Copper wire offcuts suitable for material recovery.",
+    createdAt: "2026-10-11T11:15:00",
   },
   {
     id: "listing-004",
@@ -65,6 +69,7 @@ export const demoListings: ScrapListing[] = [
     verifiedVendor: false,
     quantity: "Approximately 180 kg",
     description: "Flattened cardboard bundles for recycling.",
+    createdAt: "2026-10-10T09:00:00",
   },
   {
     id: "listing-005",
@@ -78,6 +83,7 @@ export const demoListings: ScrapListing[] = [
     verifiedVendor: true,
     quantity: "Approximately 500 kg",
     description: "Mixed iron and steel scrap for metal recovery.",
+    createdAt: "2026-10-09T16:45:00",
   },
   {
     id: "listing-006",
@@ -91,5 +97,6 @@ export const demoListings: ScrapListing[] = [
     verifiedVendor: false,
     quantity: "12 pieces",
     description: "Faulty motors sold as scrap; inspect before purchase.",
+    createdAt: "2026-10-08T12:00:00",
   },
 ];

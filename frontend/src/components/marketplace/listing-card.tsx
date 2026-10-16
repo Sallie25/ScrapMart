@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { ListingPhoto } from "@/components/marketplace/listing-photo";
 import type { ScrapListing } from "@/lib/data/listings";
 
 type ListingCardProps = {
@@ -19,25 +20,12 @@ export function ListingCard({ listing }: ListingCardProps) {
         className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         aria-label={`View ${listing.title}`}
       >
-        <div
-          className="flex aspect-[4/3] items-center justify-center bg-background"
-          aria-hidden="true"
-        >
-          <div className="text-center">
-            <div className="text-4xl">
-              {listing.category === "Metals"
-                ? "🔩"
-                : listing.category === "Plastics"
-                  ? "♻️"
-                  : listing.category === "Paper"
-                    ? "📦"
-                    : "⚙️"}
-            </div>
-            <p className="mt-2 text-xs text-muted">
-              {listing.category}
-            </p>
-          </div>
-        </div>
+        <ListingPhoto
+          listingId={listing.id}
+          category={listing.category}
+          title={listing.title}
+          className="aspect-[4/3] bg-background"
+        />
 
         <div className="space-y-3 p-4">
           <div className="flex flex-wrap items-center gap-2">

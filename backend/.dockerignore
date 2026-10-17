@@ -1,0 +1,38 @@
+# Git repository metadata
+.git
+.gitignore
+
+# Local Python environments
+.venv/
+venv/
+env/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Local editor and OS files
+.vscode/
+.idea/
+.DS_Store
+
+# Local build artifacts
+build/
+dist/
+*.egg-info/
+
+# Logs
+*.log

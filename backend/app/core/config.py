@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,6 +11,12 @@ class Settings(BaseSettings):
 
     database_url: str | None = None
     redis_url: str = "redis://redis:6379/0"
+
+    # Validated by token helpers on use, not during application/health startup.
+    jwt_signing_secret: SecretStr | None = None
+    jwt_issuer: str = "scrapmart-backend"
+    jwt_audience: str = "scrapmart-web"
+    access_token_expire_minutes: int = 15
 
     model_config = SettingsConfigDict(
         env_file=".env",

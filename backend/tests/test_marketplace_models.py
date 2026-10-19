@@ -36,6 +36,10 @@ def database():
 
     metadata = sa.MetaData()
     for table in Base.metadata.sorted_tables:
+        # Keep this pre-reservation marketplace fixture at its original schema.
+        # Table.to_metadata does not preserve conditional PostgreSQL-only DDL.
+        if table.name in {"email_identity_reservations", "email_identity_policy_state"}:
+            continue
         clone = table.to_metadata(metadata)
         # SQLite cannot express deferred UNIQUE constraints. Only the clone
         # is changed; PostgreSQL DDL is checked separately below.

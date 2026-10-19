@@ -8,7 +8,8 @@ already installed in `.venv`.
 
 ## Authentication security foundation (Stage 2A)
 
-No registration, login, refresh, or logout endpoints are implemented yet.
+Buyer registration is implemented in Stage 2C.1 below. Login, refresh and logout
+HTTP endpoints are not implemented yet.
 The helpers in `app/modules/auth/security.py` do not access the database.
 JWT validation alone does not establish a live session or account permissions.
 
@@ -54,8 +55,8 @@ Refresh helpers generate canonical 43-character base64url tokens from 32 random
 bytes. Persist only `digest_refresh_token(token)`, a 32-byte SHA-256 digest matching
 the `RefreshToken.token_digest` column. Never persist the opaque bearer value or
 put it in logs. `AuthSession` and `RefreshToken` persistence models exist from
-Stage 1. Stage 2B adds the services described below. Cookies and authentication
-HTTP endpoints are not implemented.
+Stage 1. Stage 2B adds the services described below. Buyer registration is
+implemented in Stage 2C.1; cookies and session HTTP endpoints are not implemented.
 
 Focused offline checks: the 222-test subset below excludes `tests/test_health.py`
 and is not the full suite. No external database or services required; database
@@ -128,3 +129,293 @@ SCRAPMART_RUN_LOCAL_POSTGRES_TESTS=1 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python 
 Offline SQLite tests do not establish concurrency safety. The PostgreSQL tests
 exercise rotation replay races and logout-all versus creation under Read Committed,
 Repeatable Read, and Serializable isolation, plus expiry after a lock wait.
+
+## Buyer registration API (Stage 2C.1)
+
+`POST /api/v1/auth/buyer/signup` accepts only `application/json`:
+
+```json
+{
+  "email": "buyer@example.test",
+  "password": "a sufficiently long passphrase",
+  "full_name": "Example Buyer",
+  "phone_number": null
+}
+```
+
+Email, password and full name are required. Unknown fields are rejected. Names
+must be nonblank and at most 150 characters; optional phone numbers must be
+nonblank when supplied and at most 20 characters. Passwords use the existing
+15–128 character policy and are never trimmed or normalized. International
+characters remain supported in passwords and full names.
+
+New email addresses must be **ASCII-only across the complete input**, including
+both local part and domain. Non-ASCII input is rejected before trimming or
+lowercasing, so Unicode characters that lowercase to ASCII cannot bypass the
+policy. Accepted input is trimmed and lowercased, limited to 255 characters, then
+syntax-validated with `email-validator` without DNS/delivery checks. The same
+ASCII address is used for storage and rate-limit keys. Unicode domain spellings
+are rejected; valid ASCII IDNA/punycode domains are allowed. No email records are
+rewritten, merged or deleted.
+No government ID, email verification, notifications or recovery flow is added.
+
+For both new and already registered valid emails, the response is **202 Accepted**:
+
+```json
+{"message":"If registration was successful, you can now sign in."}
+```
+
+Both paths return the same status, body and relevant headers, including
+`Cache-Control: no-store`, without IDs, cookies, hashes or tokens. The frontend
+should display this acknowledgment and offer a login link. Login itself is not
+implemented. No authentication sessions, refresh tokens or Vendor profiles are
+created by registration. An existing identity is never modified or linked, and
+an existing Vendor is never silently granted a Buyer profile.
+
+`BuyerRegistrationService(engine)` accepts only a synchronous Engine. Every
+transaction attempt creates its own engine-bound Session and rejects AUTOCOMMIT.
+New User and BuyerProfile records commit atomically; any profile/commit failure
+rolls back the User too. Both profile timestamps use the same database time.
+Legacy `User.role` is set to `buyer` only for the newly created identity and is not
+a substitute for explicit profile authorization. No database schema changes are
+required. PostgreSQL uses explicit ASCII A–Z translation for case-insensitive
+legacy matching, independent of locale-specific lowercasing. SQLite's ASCII
+lowercase operation serves the same purpose in offline tests. Database Unicode
+lowercase matches are additionally reserved. Non-ASCII legacy emails are streamed
+and checked for Python-lowercase and IDNA ASCII aliases. A collision blocks
+creation and returns the same generic 202 acknowledgment; it does not link or
+modify the legacy identity. For example, legacy `K@example.test` reserves
+`k@example.test`, PostgreSQL's lowercase projection of `İ@example.test` reserves
+`i@example.test`, and a legacy Unicode domain reserves its ASCII punycode spelling.
+
+These conservative checks avoid relying on agreement between Python and database
+Unicode lowercasing. They do not define a general Unicode account-linking policy.
+Existing Unicode identities remain untouched. Legacy scans add work proportional
+to legacy data and remain a scaling consideration without schema changes.
+Concurrent new requests store the same lowercase ASCII value, so the existing
+unique index resolves insert races. Only an email uniqueness violation
+is treated as an accepted duplicate; unrelated persistence errors return a safe
+503. Serialization/deadlock failures retry at most three independent attempts.
+Future identity-creation or email-update paths must preserve this policy: the
+existing case-sensitive index alone cannot prevent differently cased legacy
+writes from a separate, noncompliant writer.
+
+Every policy-valid attempt performs Argon2id hashing before the existence lookup,
+including duplicates. This removes an obvious timing shortcut but does not make
+execution constant-time: insert/commit work, index/cache state and concurrent
+conflicts can still affect timing. The acknowledgment is enumeration-resistant,
+not a guarantee that statistical timing inference is impossible.
+
+### Browser and proxy configuration
+
+Set `AUTH_ALLOWED_ORIGINS` to a JSON array of exact frontend origins, for example
+`["http://localhost:3000"]` locally and the actual HTTPS frontend domain(s) in
+production. Empty configuration denies signup. Wildcards and non-loopback HTTP
+origins are rejected. No Vercel preview/domain wildcard is trusted automatically.
+POST requires exactly one allowed `Origin` and `X-ScrapMart-CSRF: 1`, including for
+nonbrowser clients in this phase. Form submissions are rejected. CORS explicitly
+allows GET/POST/OPTIONS and Content-Type/X-ScrapMart-CSRF with credentials enabled;
+the only exposed custom response header is Retry-After. There are no auth cookies
+in this phase; `credentials: include` is not required for signup. Use HTTPS in
+production. Browser tests must use a configured local origin during development.
+
+Run Uvicorn with **`--no-proxy-headers`**, as the Docker command now does. This
+preserves the socket peer for application-level trust checks. Never independently
+configure server middleware to rewrite `scope.client`. By default forwarded
+headers are ignored. Only when the actual peer belongs to explicitly configured
+`AUTH_TRUSTED_PROXY_CIDRS` is X-Forwarded-For processed, from right to left through
+trusted hops. The proxy must append/replace forwarding headers correctly; restrict
+backend access appropriately. Do not trust arbitrary client-supplied headers or
+all-address CIDRs. The standardized Forwarded header is not used.
+
+All auth responses are non-cacheable. Validation responses contain only safe field
+names, never Pydantic input values, unknown submitted field names, credential
+payloads or database details. Requests are capped at 16 KiB before JSON parsing.
+Status codes are 403 for Origin/CSRF rejection, 415 for unsupported media types,
+413 for oversized bodies, 422 for validation, 429 for limits, and 503 for limiter
+or known persistence unavailability; unexpected failures return a generic 500. Errors use `detail` containing `code`,
+`message` and a list of safe field names in `fields`.
+
+### Shared signup rate limiting
+
+The Python `redis` client is the production boundary; in-memory doubles exist
+only in offline tests. A Redis Lua script atomically enforces fixed windows across
+workers: **5 attempts per hour per normalized email**, **20 per hour per client IP**.
+The first counted attempt starts each 3600-second window; rejected attempts never
+extend expiry. IP attempts are counted before parsing/field validation, after the
+browser/content-type guard. Validly shaped email addresses count even when other
+fields are invalid. Origin/media/size rejections do not consume these counters;
+reverse-proxy connection/body/time limits remain necessary for broader abuse.
+
+Configure a separate `SIGNUP_RATE_LIMIT_SECRET` using a randomly generated 32-byte
+unpadded base64url value. The key has no default. Both email and IP counter keys
+use domain-separated HMAC-SHA256; neither submitted identity values nor passwords
+are stored in Redis keys. All workers must share the secret and Redis deployment.
+Changing the secret resets effective counters; protect and coordinate rotation.
+Counters are independent of database account existence. 429 responses include
+Retry-After. Missing configuration, Redis failures and malformed counter state
+fail closed with a safe 503 before hashing or database work. Redis calls have
+one-second connect/read timeouts and no automatic retries.
+
+`REDIS_URL` is secret-masked configuration, supporting private-network connections,
+authentication and `rediss://` TLS via the Redis client. The existing Compose Redis
+has no published host port. Do not expose Redis publicly. Production Redis on
+Netcup remains a deployment prerequisite, not a completed deployment. Configure
+access control, capacity/eviction and availability: Redis restarts, eviction or
+counter loss can reset effective limits. Shared limits do not prevent distributed
+abuse or intentional exhaustion of someone else's email budget.
+
+### Validation commands
+
+Offline tests use SQLite and a Redis boundary double, with no remote services:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m pytest -p no:cacheprovider -q
+```
+
+PostgreSQL registration tests reuse the established fixed-container identity and
+public-data preflight, check database names before writes, and use disposable
+schemas with explicit cleanup; they never run migrations:
+
+```bash
+SCRAPMART_RUN_LOCAL_POSTGRES_TESTS=1 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m pytest -p no:cacheprovider -q tests/test_buyer_signup_postgresql.py
+```
+
+Real Lua counter tests require the existing running `scrapmart-redis` container
+with image `redis:7.4-alpine` and no published port. They connect only to its
+inspected container IP, use random test-key namespaces and delete only those keys:
+
+```bash
+SCRAPMART_RUN_LOCAL_REDIS_TESTS=1 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m pytest -p no:cacheprovider -q tests/test_signup_rate_limit_redis.py
+```
+
+### Phase 1 email reservation schema (not enabled for registration)
+
+Alembic revision `c42f7d18a903` follows `b81d4f2a9c06`. It adds
+`email_identity_reservations` and `email_identity_policy_state`. This is schema
+preparation only: no User records are rewritten, no aliases are backfilled, and
+no registration-service queries are replaced. The migration inserts the singleton
+policy row in **building**, never ready. Applying it deliberately prevents new
+User inserts until a separately approved backfill, completeness verification,
+readiness finalization, and service integration have been completed. Do not apply
+it to a live signup deployment as an independently usable registration release.
+Phase 1 local validation uses disposable schemas; it does not upgrade `public`.
+
+Reservation keys use deterministic lowercase printable ASCII and PostgreSQL `C`
+collation, with an immediate unique constraint. The database checks key structure;
+the future identity-policy implementation remains responsible for email syntax
+and complete version-1 legacy alias generation. Reservations are either `owned`
+with a User UUID or permanently `blocked` with no owner. A User can own multiple
+aliases. Ownership cannot move to another User, keys and policy versions cannot
+change, and blocked rows cannot become owned. Maintenance may conservatively
+convert owned rows to blocked; this never authorizes account linking or login.
+
+The User foreign key is `DEFERRABLE INITIALLY DEFERRED`, with `NO ACTION` for
+delete and update. A future transaction must allocate UUIDs, insert the owned
+reservation first, insert User and BuyerProfile, and commit all three together.
+An orphan reservation fails at commit. A VOLATILE, SECURITY INVOKER,
+nondeferrable AFTER INSERT constraint trigger requires ready policy version 1
+and an exact reservation owned by that User. It sees earlier writes in the same
+transaction and uses indexed key lookups, never a User-table scan. A second AFTER
+UPDATE trigger rejects actual email changes, including changes introduced by
+BEFORE triggers; unchanged legacy Unicode email values and Stage 2B's
+value-preserving User updates remain valid.
+
+The complete reservation-first sequence currently exercised by Phase 1 tests is:
+insert the reservation (including its unique-index entry), insert the User, then
+run the User insert guard. Only inside that guard is the policy row SHARE lock
+obtained, followed by the matching reservation SHARE lock. Those locks remain
+held until transaction end. The guard's lock order therefore does **not** establish
+a policy-before-reservation order for the entire transaction.
+
+For Phase 1, maintenance must **disable and drain all identity writers before
+modifying reservation keys or readiness**. Disable every identity-writing entry
+point and wait for all in-flight identity-writing transactions to finish; merely
+disabling new requests or locking the policy row is insufficient. This includes
+User creation/deletion, email changes, and registry writers. For example, an
+in-flight registration may hold an uncommitted reservation and wait for a policy
+lock held by maintenance, while maintenance waits on the same reservation's
+unique-index entry. This inverted lock sequence can deadlock. PostgreSQL detects
+the cycle and aborts a participant with SQLSTATE `40P01`; the caller must roll back
+the entire transaction so no partial User/reservation changes persist. This
+preserves consistency but is not an acceptable substitute for draining writers.
+An isolated local regression deliberately exercises this unsafe overlap and
+verifies the committed outcome and the aborted transaction's rollback.
+
+Phase 2 registration integration must acquire and validate the appropriate policy
+row SHARE lock **before its first reservation write**, retaining it until commit,
+unless a tested alternative protocol is explicitly approved. The table-insert
+order remains reservation, User, then BuyerProfile. Maintenance must follow the
+corresponding policy-before-reservation protocol as well as the writer freeze.
+No registration implementation or production readiness is enabled in Phase 1.
+
+Under Repeatable Read/Serializable, a stale
+policy row changed since the transaction snapshot causes serialization failure;
+never retry only a statement. The future service must retry the entire transaction
+in a fresh Session for SQLSTATE `40001`/`40P01` with a bounded retry count. Unique
+conflicts remain subject to generic duplicate acknowledgment, after rollback;
+other failures fail closed. No retry or public integration is added in Phase 1.
+The identity-writer freeze and drain also apply during future backfill/finalization.
+Holding the policy lock serializes state transitions; counters and a 32-byte manifest alone are **not** proof of a
+complete backfill. No finalizer is included here.
+
+#### Required database privilege boundary
+
+Use distinct maintenance/migration and runtime roles before deploying this schema.
+The runtime role must not own the database, schema, tables, or guard functions;
+it must have no superuser, CREATEROLE, schema CREATE, replication, BYPASSRLS,
+owner-role membership/SET ROLE path, or permission to change
+`session_replication_role`. Revoking grants from a table owner does not restrict
+that owner. Production role names/provisioning are deployment prerequisites, not
+created by this migration. Check inherited/PUBLIC grants and role memberships,
+not just direct role attributes. Migration/maintenance credentials must never be
+used by the application. The migration revokes PUBLIC access to the new tables
+and functions, but cannot audit or undo pre-existing broader role grants.
+
+Required runtime grants, using the deployment's actual schema/role names:
+
+```sql
+GRANT USAGE ON SCHEMA public TO scrapmart_runtime;
+GRANT SELECT ON public.email_identity_reservations,
+                public.email_identity_policy_state TO scrapmart_runtime;
+GRANT INSERT (id, lookup_key, user_id)
+    ON public.email_identity_reservations TO scrapmart_runtime;
+-- PostgreSQL SELECT ... FOR SHARE requires UPDATE on at least one column.
+-- The singleton CHECK and reservation mutation trigger protect these ID columns.
+GRANT UPDATE (id) ON public.email_identity_reservations,
+                     public.email_identity_policy_state TO scrapmart_runtime;
+```
+
+User/Buyer/session CRUD grants must separately match their existing operations.
+For User insertion grant the columns actually written by SQLAlchemy, including
+Python-side defaults such as `role`/`is_active`. Grant Stage 2B UPDATE on
+`users.updated_at`. Do not grant runtime DELETE/TRUNCATE on Users or the registry,
+policy-state INSERT/DELETE/TRUNCATE, reservation state/version/owner UPDATE,
+trigger DDL, or table-wide UPDATE on the registry. No runtime grant may permit
+readiness activation. Trigger functions have fixed `pg_catalog` search paths and
+fully qualified object references; no SECURITY DEFINER escalation is used.
+PostgreSQL checks trigger-function EXECUTE at trigger creation, not each firing;
+the restricted role does not need an EXECUTE grant on these functions.
+
+Only trusted maintenance may load blocked aliases or update policy state. It can
+bypass/drop guards as an object owner, so operational access control is essential.
+Maintenance must never delete/reuse reservation keys or remove blocked history;
+any exceptional destructive repair requires a separately reviewed migration and
+writer freeze. Existing User deletion is additionally restricted by deferred
+reservation foreign keys and existing profile/session foreign keys. Before live
+rollout, audit effective privileges with the actual runtime login and validate
+that forbidden DML/DDL and SET ROLE paths fail. Local tests use temporary NOLOGIN
+non-owner roles, exercise permitted and forbidden operations, and remove them.
+
+Downgrade removes guards/functions and only the two new tables, retaining Users
+and existing profiles/sessions. It discards reservation/checkpoint history and
+restores the previous unprotected writer behavior; do it only with writers frozen
+and an audited registry export/backup, never as a way to enable public signup.
+A subsequent upgrade starts again at building and requires a fresh verified
+backfill. Phase 1 neither implements backfill recovery nor enables production.
+
+Focused local validation (performs identity/revision/empty-table preflight):
+
+```bash
+SCRAPMART_RUN_LOCAL_POSTGRES_TESTS=1 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m pytest -p no:cacheprovider -q tests/test_email_identity_postgresql.py
+```

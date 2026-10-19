@@ -5,6 +5,7 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 from app.core.config import get_settings
 from app.infrastructure.database.base import Base
+from app.modules.auth import email_identity_models as email_identity_models  # noqa: F401
 from app.modules.auth import models as auth_models  # noqa: F401
 from app.modules.auth import session_models as auth_session_models  # noqa: F401
 from app.modules.buyers import models as buyer_models  # noqa: F401

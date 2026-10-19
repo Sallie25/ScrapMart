@@ -28,92 +28,106 @@ const categories = [
 export default function Home() {
   return (
     <>
-      <SiteHeader />
+      <div className="bg-[#064d31] px-4 py-2 text-center text-xs font-bold leading-4 text-white">
+        PAY ON DELIVERY · Never pay before receiving your item
+      </div>
+      <SiteHeader variant="homepage" />
 
       <main>
         {/* Hero */}
-        <section className="overflow-hidden bg-[#f7f8f3] py-14 sm:py-20 lg:py-24">
-          <Container>
-            <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
-              <div>
-                <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#dce8d5] bg-white px-4 py-2 text-sm font-semibold text-[#356b38]">
-                  <span className="h-2 w-2 rounded-full bg-[#4b914e]" />
-                  A better way to buy and sell scrap
+        <section className="bg-[#f4f7f5] pb-16 pt-10 sm:pb-20 sm:pt-14 lg:pb-14 lg:pt-10">
+          <div className="mx-auto w-full max-w-[1304px] px-4 sm:px-6 lg:px-8">
+            <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,1.088fr)_minmax(0,1fr)] lg:gap-[50px]">
+              <div className="min-w-0">
+                <p className="mb-6 inline-flex items-center gap-2 rounded-full bg-[#e8faf1] px-3 py-1.5 text-[13px] font-semibold text-[#006b52]">
+                  <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[#006b52]" />
+                  Nigerian scrap marketplace
                 </p>
 
-                <h1 className="max-w-xl text-4xl font-bold leading-tight tracking-tight text-[#202820] sm:text-5xl lg:text-6xl">
-                  Good materials deserve a{" "}
-                  <span className="text-[#438447]">second market.</span>
+                <h1 className="text-[42px] font-bold leading-[1.04] tracking-[-0.04em] text-[#15221b] sm:text-6xl lg:text-[clamp(48px,4.4vw,68px)]">
+                  <span className="xl:whitespace-nowrap">Buy and sell scrap,</span>{" "}
+                  <span className="text-[#087b40] lg:block">simply.</span>
                 </h1>
 
-                <p className="mt-6 max-w-xl text-base leading-8 text-[#5e675d] sm:text-lg">
-                  Turn unwanted materials into new opportunities. Discover
-                  scrap near you, connect with vendors, and give useful
-                  materials another life.
+                <p className="mt-6 max-w-[600px] text-base leading-[1.65] text-[#63736c] sm:text-lg">
+                  Buy and sell reusable, used and scrap materials through a
+                  Nigerian marketplace built for local trade. No advance payment
+                  required.
                 </p>
 
-                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                   <Link
-                    href="/marketplace"
-                    className="inline-flex min-h-12 items-center justify-center rounded-lg bg-[#347a3b] px-6 py-3 font-semibold text-white transition hover:bg-[#286331] focus:outline-none focus:ring-2 focus:ring-[#347a3b] focus:ring-offset-2"
+                    href="/onboarding"
+                    className="inline-flex min-h-[50px] items-center justify-center gap-3 rounded-xl bg-[#087b40] px-8 py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[#066333] focus:outline-none focus:ring-2 focus:ring-[#087b40] focus:ring-offset-2"
                   >
-                    Explore marketplace
-                    <span aria-hidden="true" className="ml-2">
-                      →
-                    </span>
+                    Get started
+                    <span aria-hidden="true">→</span>
                   </Link>
-
                   <Link
-                    href="/onboarding?intent=sell"
-                    className="inline-flex min-h-12 items-center justify-center rounded-lg border border-[#d5ddd1] bg-white px-6 py-3 font-semibold text-[#273b29] transition hover:bg-[#f0f4ed] focus:outline-none focus:ring-2 focus:ring-[#347a3b] focus:ring-offset-2"
+                    href="/login"
+                    className="inline-flex min-h-[50px] items-center justify-center rounded-xl border border-[#dce4df] bg-white px-5 py-3 text-sm font-medium text-[#15221b] transition-colors hover:bg-[#edf5ef] focus:outline-none focus:ring-2 focus:ring-[#087b40] focus:ring-offset-2"
                   >
-                    Start selling
+                    Log in to marketplace
                   </Link>
                 </div>
 
-                <div className="mt-8 flex flex-wrap gap-x-6 gap-y-3 text-sm text-[#596558]">
-                  <span className="inline-flex items-center gap-2">
-                    <span className="font-bold text-[#347a3b]">✓</span>
-                    Vendor verification
-                  </span>
-                  <span className="inline-flex items-center gap-2">
-                    <span className="font-bold text-[#347a3b]">✓</span>
-                    Pay on delivery
-                  </span>
-                  <span className="inline-flex items-center gap-2">
-                    <span className="font-bold text-[#347a3b]">✓</span>
-                    Connect with vendors
-                  </span>
+                <div className="mt-8 flex flex-wrap gap-x-5 gap-y-3 text-sm font-semibold text-[#63736c]">
+                  {[
+                    "Seller verification",
+                    "Pay on delivery",
+                    "Local marketplace",
+                  ].map((label) => (
+                    <span key={label} className="inline-flex items-center gap-2">
+                      <span aria-hidden="true" className="font-normal text-[#087b40]">✓</span>
+                      {label}
+                    </span>
+                  ))}
                 </div>
               </div>
 
-              <div className="relative">
-                <div className="absolute -inset-4 rounded-[2rem] bg-[#e5eddf]" />
-
-                <div className="relative overflow-hidden rounded-2xl bg-white shadow-xl">
+              <div className="relative min-w-0 pb-5">
+                {/* Temporary still image; the approved video treatment is deferred. */}
+                <div className="overflow-hidden rounded-[32px] bg-[#15221b] p-3 shadow-[0_28px_44px_-16px_rgba(21,34,27,0.38)]">
                   <Image
                     src="/images/hero-plastics.jpg"
                     alt="Plastic materials collected for recycling in Lagos"
                     width={1200}
                     height={900}
-                    priority
-                    className="h-[320px] w-full object-cover sm:h-[420px] lg:h-[480px]"
-                    sizes="(max-width: 1024px) 100vw, 50vw"
+                    preload
+                    className="h-[340px] w-full rounded-[22px] object-cover sm:h-[420px] lg:h-[440px] xl:h-[488px]"
+                    sizes="(max-width: 1023px) 100vw, (max-width: 1304px) 44vw, 546px"
                   />
+                </div>
 
-                  <div className="absolute inset-x-4 bottom-4 rounded-xl border border-white/60 bg-white/95 p-4 shadow-lg backdrop-blur-sm sm:inset-x-5 sm:bottom-5 sm:p-5">
-                    <p className="text-sm font-semibold text-[#347a3b]">
-                      Waste less. Find value.
-                    </p>
-                    <p className="mt-1 text-sm leading-6 text-[#515b50]">
-                      Connect with people who buy and sell reusable and scrap
-                      materials.
-                    </p>
-                  </div>
+                <div className="absolute bottom-0 left-3 w-[260px] max-w-[calc(100%-24px)] rounded-2xl border border-[#dce4df] bg-white p-4 shadow-[0_14px_26px_-8px_rgba(21,34,27,0.35)] sm:left-5 lg:-left-8 lg:p-5">
+                  <p className="text-[11px] font-bold tracking-[0.12em] text-[#63736c]">
+                    SAFE PAYMENT
+                  </p>
+                  <p className="mt-1 text-lg font-bold text-[#15221b]">
+                    Pay only after delivery
+                  </p>
+                  <p className="mt-1 text-sm text-[#63736c]">
+                    Cash, POS or transfer at delivery
+                  </p>
                 </div>
               </div>
             </div>
-          </Container>
+          </div>
+        </section>
+
+        <section aria-label="Marketplace reassurance" className="border-t border-[#dce4df] bg-white py-8">
+          <div className="mx-auto grid w-full max-w-[1304px] gap-6 px-4 text-center sm:grid-cols-3 sm:px-6 lg:px-8">
+            {[
+              ["Browse materials", "Marketplace listings"],
+              ["Connect locally", "Buyers and sellers"],
+              ["Pay on delivery", "No advance payment"],
+            ].map(([title, description]) => (
+              <div key={title}>
+                <p className="text-xl font-bold text-[#15221b] sm:text-2xl">{title}</p>
+                <p className="mt-1 text-sm font-semibold text-[#63736c]">{description}</p>
+              </div>
+            ))}
+          </div>
         </section>
 
         {/* Categories */}

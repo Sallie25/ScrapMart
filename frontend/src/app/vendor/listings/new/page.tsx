@@ -341,7 +341,6 @@ export default function NewVendorListingPage() {
                   <option value="tonne">Per tonne</option>
                   <option value="piece">Per piece</option>
                   <option value="bundle">Per bundle</option>
-                  <option value="bag">Per bag</option>
                 </select>
               </div>
             </div>

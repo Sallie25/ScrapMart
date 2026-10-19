@@ -44,7 +44,7 @@ export const loginSchema = z.object({
   loginIdentifier: z
     .string()
     .trim()
-    .min(1, "Enter your email address or phone number"),
+    .min(1, "Enter your login identifier"),
 
   password: z
     .string()

@@ -46,13 +46,13 @@ export function LoginForm() {
       >
         <div>
           <Label htmlFor="loginIdentifier" required>
-            Email address or phone number
+            Login identifier
           </Label>
 
           <Input
             id="loginIdentifier"
             type="text"
-            placeholder="Enter your email or phone number"
+            placeholder="Enter your login identifier"
             autoComplete="username"
             error={Boolean(errors.loginIdentifier)}
             aria-invalid={Boolean(errors.loginIdentifier)}

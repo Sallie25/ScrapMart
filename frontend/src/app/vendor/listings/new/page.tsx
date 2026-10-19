@@ -5,7 +5,10 @@ import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import { SiteHeader } from "@/components/layout/site-header";
 import { saveVendorDemoListing } from "@/lib/data/vendor-listings";
-import { saveVendorDemoPhoto } from "@/lib/data/vendor-listing-photos";
+import {
+  deleteVendorDemoPhoto,
+  saveVendorDemoPhoto,
+} from "@/lib/data/vendor-listing-photos";
 
 const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
 
@@ -96,10 +99,13 @@ export default function NewVendorListingPage() {
     const listingId = crypto.randomUUID();
 
     setIsSaving(true);
+    let photoCommitted = false;
+    let metadataCommitted = false;
 
     try {
       if (photoFile) {
         await saveVendorDemoPhoto(listingId, photoFile);
+        photoCommitted = true;
       }
 
       saveVendorDemoListing({
@@ -116,12 +122,26 @@ export default function NewVendorListingPage() {
         photoName,
         createdAt: new Date().toISOString(),
       });
+      metadataCommitted = true;
 
       setSubmitted(true);
     } catch {
-      setErrorMessage(
-        "We couldn't save the listing or its photo in this browser. Please try again, or choose a smaller image.",
-      );
+      if (metadataCommitted) {
+        setErrorMessage("The demo listing was saved, but the view could not update. Please check your dashboard.");
+      } else if (photoCommitted) {
+        try {
+          await deleteVendorDemoPhoto(listingId);
+          setErrorMessage("The listing could not be saved. Its photo was cleaned up. Please try again.");
+        } catch {
+          setErrorMessage("The listing could not be saved, and its photo could not be cleaned up. A photo may remain in browser storage.");
+        }
+      } else {
+        setErrorMessage(
+          photoFile
+            ? "The photo could not be saved in this browser. The listing was not saved. Please try again."
+            : "The listing could not be saved in this browser. Please try again.",
+        );
+      }
     } finally {
       setIsSaving(false);
     }

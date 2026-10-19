@@ -2,13 +2,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SiteHeader } from "@/components/layout/site-header";
 import {
   deleteVendorDemoListing,
   getVendorDemoListings,
+  hasVendorDemoListing,
   type VendorDemoListing,
 } from "@/lib/data/vendor-listings";
+import { deleteVendorDemoPhoto } from "@/lib/data/vendor-listing-photos";
 
 const sampleListings = [
   {
@@ -28,6 +30,12 @@ const sampleListings = [
 export default function VendorDashboardPage() {
   const [listings, setListings] = useState<VendorDemoListing[]>(() => []);
   const [ready, setReady] = useState(false);
+  const [removingIds, setRemovingIds] = useState<string[]>([]);
+  const removalInProgress = useRef(new Set<string>());
+  const [removalFeedback, setRemovalFeedback] = useState<{
+    error: boolean;
+    message: string;
+  } | null>(null);
 
   useEffect(() => {
     const refreshListings = () => {
@@ -53,13 +61,52 @@ export default function VendorDashboardPage() {
     };
   }, []);
 
-  function handleDelete(id: string, title: string) {
+  async function handleDelete(id: string, title: string) {
+    if (removalInProgress.current.has(id)) {
+      return;
+    }
+
     const confirmed = window.confirm(
       `Remove "${title}" from this browser's demo listings?`,
     );
 
-    if (confirmed) {
-      deleteVendorDemoListing(id);
+    if (!confirmed) {
+      return;
+    }
+
+    removalInProgress.current.add(id);
+    setRemovingIds((current) => [...current, id]);
+    setRemovalFeedback(null);
+    let phase: "read" | "photo" | "metadata" = "read";
+
+    try {
+      if (!hasVendorDemoListing(id)) {
+        setListings(getVendorDemoListings());
+        setRemovalFeedback({ error: false, message: "This demo listing is no longer present." });
+        return;
+      }
+
+      phase = "photo";
+      await deleteVendorDemoPhoto(id);
+      phase = "metadata";
+      const result = deleteVendorDemoListing(id);
+      setListings(getVendorDemoListings());
+
+      if (!result.removed) {
+        setRemovalFeedback({ error: false, message: "This demo listing was already unavailable; this operation did not remove its metadata." });
+      }
+    } catch {
+      setRemovalFeedback({
+        error: true,
+        message: phase === "metadata"
+          ? "Photo cleanup completed, but listing metadata removal could not be completed or confirmed. Please retry."
+          : phase === "photo"
+            ? "Removal could not be completed because photo cleanup failed. Listing metadata was not removed. Please retry."
+            : "Saved demo listings could not be read. Removal was not started. Please retry.",
+      });
+    } finally {
+      removalInProgress.current.delete(id);
+      setRemovingIds((current) => current.filter((entry) => entry !== id));
     }
   }
 
@@ -159,6 +206,15 @@ export default function VendorDashboardPage() {
             </Link>
           </div>
 
+          {removalFeedback && (
+            <p
+              role={removalFeedback.error ? "alert" : "status"}
+              className="mt-4 rounded-lg border border-border bg-surface p-3 text-sm text-text"
+            >
+              {removalFeedback.message}
+            </p>
+          )}
+
           <div className="mt-4 overflow-hidden rounded-xl border border-border">
             {!ready ? (
               <p className="p-5 text-sm text-muted">
@@ -210,9 +266,11 @@ export default function VendorDashboardPage() {
                     <button
                       type="button"
                       onClick={() => handleDelete(listing.id, listing.title)}
-                      className="rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+                      disabled={removingIds.includes(listing.id)}
+                      aria-busy={removingIds.includes(listing.id)}
+                      className="rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      Remove
+                      {removingIds.includes(listing.id) ? "Removing..." : "Remove"}
                     </button>
                   </div>
                 </article>

@@ -183,9 +183,11 @@ export function SignupForm({ role }: SignupFormProps) {
                 Identity verification
               </h3>
               <p className="mt-2 text-sm leading-6 text-muted">
-                Vendors must complete identity verification before using
-                vendor features. Document submission and verification
-                will be implemented separately.
+                Vendor registration will require government-issued ID submission.
+                Submission does not mean you are verified; verification requires
+                administrator review. While pending review, you may prepare listing
+                drafts but cannot publish until approved. Document submission and
+                verification are not implemented in this prototype.
               </p>
               <Badge variant="warning">Verification required</Badge>
             </div>

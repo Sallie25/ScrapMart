@@ -54,7 +54,7 @@ export default function CategoriesPage() {
                   {category.description}
                 </p>
                 <Link
-                  href="/marketplace"
+                  href={`/marketplace?category=${encodeURIComponent(category.name)}`}
                   className="mt-5 inline-flex rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-white hover:opacity-90"
                 >
                   Browse materials

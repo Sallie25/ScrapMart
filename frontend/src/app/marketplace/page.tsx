@@ -1,27 +1,61 @@
 
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { SiteHeader } from "@/components/layout/site-header";
 import { ListingCard } from "@/components/marketplace/listing-card";
 import { Container } from "@/components/ui/container";
 import { PageHeader } from "@/components/ui/page-header";
 import { demoListings } from "@/lib/data/listings";
 
+const allListings = demoListings;
+const categories = Array.from(
+  new Set(allListings.map((listing) => listing.category)),
+).sort();
+
 export default function MarketplacePage() {
+  return (
+    <Suspense
+      fallback={
+        <>
+          <SiteHeader />
+          <main className="min-h-screen bg-background py-10 sm:py-14">
+            <Container>
+              <p role="status" className="text-muted">Loading marketplace...</p>
+            </Container>
+          </main>
+        </>
+      }
+    >
+      <MarketplaceFromQuery />
+    </Suspense>
+  );
+}
+
+function MarketplaceFromQuery() {
+  const searchParams = useSearchParams();
+  const rawCategory = searchParams.get("category");
+  const initialCategory = categories.find(
+    (category) => category.toLowerCase() === (rawCategory ?? "").trim().toLowerCase(),
+  ) ?? "All";
+
+  return (
+    <MarketplaceContent
+      key={rawCategory ?? ""}
+      initialCategory={initialCategory}
+    />
+  );
+}
+
+function MarketplaceContent({ initialCategory }: { initialCategory: string }) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const [selectedLocation, setSelectedLocation] = useState("All");
   const [selectedCondition, setSelectedCondition] = useState("All");
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [sortOption, setSortOption] = useState("newest");
-
-  const allListings = demoListings;
-
-  const categories = Array.from(
-    new Set(allListings.map((listing) => listing.category)),
-  ).sort();
 
   const locations = Array.from(
     new Set(allListings.map((listing) => listing.location)),

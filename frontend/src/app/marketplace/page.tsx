@@ -1,69 +1,12 @@
 
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import { SiteHeader } from "@/components/layout/site-header";
 import { ListingCard } from "@/components/marketplace/listing-card";
 import { Container } from "@/components/ui/container";
 import { PageHeader } from "@/components/ui/page-header";
-import { demoListings, type ScrapListing } from "@/lib/data/listings";
-import type { VendorDemoListing } from "@/lib/data/vendor-listings";
-
-const STORAGE_KEY = "scrapmart-vendor-demo-listings";
-const UPDATE_EVENT = "scrapmart-demo-listings-updated";
-
-function subscribeToVendorListings(onChange: () => void) {
-  window.addEventListener(UPDATE_EVENT, onChange);
-  window.addEventListener("storage", onChange);
-
-  return () => {
-    window.removeEventListener(UPDATE_EVENT, onChange);
-    window.removeEventListener("storage", onChange);
-  };
-}
-
-function getVendorListingsSnapshot(): string {
-  try {
-    return window.localStorage.getItem(STORAGE_KEY) ?? "[]";
-  } catch {
-    return "[]";
-  }
-}
-
-function getServerSnapshot(): string {
-  return "[]";
-}
-
-function parseVendorListings(snapshot: string): VendorDemoListing[] {
-  try {
-    const parsed: unknown = JSON.parse(snapshot);
-
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed as VendorDemoListing[];
-  } catch {
-    return [];
-  }
-}
-
-function toScrapListing(listing: VendorDemoListing): ScrapListing {
-  return {
-    id: listing.id,
-    title: listing.title,
-    category: listing.category,
-    price: listing.price,
-    unit: listing.unit,
-    condition: listing.condition,
-    location: listing.location,
-    vendorName: listing.vendorName?.trim() || "Your Demo Shop",
-    verifiedVendor: false,
-    quantity: `${listing.quantity} ${listing.unit}${listing.quantity === 1 ? "" : "s"}`,
-    description: listing.description,
-    createdAt: listing.createdAt,
-  };
-}
+import { demoListings } from "@/lib/data/listings";
 
 export default function MarketplacePage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -74,21 +17,7 @@ export default function MarketplacePage() {
   const [maxPrice, setMaxPrice] = useState("");
   const [sortOption, setSortOption] = useState("newest");
 
-  const vendorListingsSnapshot = useSyncExternalStore(
-    subscribeToVendorListings,
-    getVendorListingsSnapshot,
-    getServerSnapshot,
-  );
-
-  const vendorListings = useMemo(
-    () => parseVendorListings(vendorListingsSnapshot),
-    [vendorListingsSnapshot],
-  );
-
-  const allListings = useMemo(
-    () => [...vendorListings.map(toScrapListing), ...demoListings],
-    [vendorListings],
-  );
+  const allListings = demoListings;
 
   const categories = Array.from(
     new Set(allListings.map((listing) => listing.category)),

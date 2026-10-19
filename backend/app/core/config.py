@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     jwt_issuer: str = "scrapmart-backend"
     jwt_audience: str = "scrapmart-web"
     access_token_expire_minutes: int = 15
+    auth_session_expire_days: int = 7
 
     model_config = SettingsConfigDict(
         env_file=".env",

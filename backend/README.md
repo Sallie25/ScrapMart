@@ -174,28 +174,24 @@ an existing Vendor is never silently granted a Buyer profile.
 
 `BuyerRegistrationService(engine)` accepts only a synchronous Engine. Every
 transaction attempt creates its own engine-bound Session and rejects AUTOCOMMIT.
-New User and BuyerProfile records commit atomically; any profile/commit failure
-rolls back the User too. Both profile timestamps use the same database time.
+New reservations, User and BuyerProfile records commit atomically; any insert
+failure rolls back all three. Both profile timestamps use the same database time.
 Legacy `User.role` is set to `buyer` only for the newly created identity and is not
 a substitute for explicit profile authorization. No database schema changes are
-required. PostgreSQL uses explicit ASCII A–Z translation for case-insensitive
-legacy matching, independent of locale-specific lowercasing. SQLite's ASCII
-lowercase operation serves the same purpose in offline tests. Database Unicode
-lowercase matches are additionally reserved. Non-ASCII legacy emails are streamed
-and checked for Python-lowercase and IDNA ASCII aliases. A collision blocks
-creation and returns the same generic 202 acknowledgment; it does not link or
-modify the legacy identity. For example, legacy `K@example.test` reserves
-`k@example.test`, PostgreSQL's lowercase projection of `İ@example.test` reserves
-`i@example.test`, and a legacy Unicode domain reserves its ASCII punycode spelling.
+required by Phase 3: the existing Phase 1 reservation schema is required. Signup
+uses the V1 policy and bounded indexed reservation lookups, not database lowercase
+or User-table scans. Previously backfilled Unicode identities remain unchanged.
+For example, legacy `K@example.test` reserves `k@example.test`, dotted-I aliases
+are blocked, and Unicode domains reserve canonical punycode and compatibility
+aliases. Any occupied bundle key prevents creation without linking accounts.
 
 These conservative checks avoid relying on agreement between Python and database
 Unicode lowercasing. They do not define a general Unicode account-linking policy.
-Existing Unicode identities remain untouched. Legacy scans add work proportional
-to legacy data and remain a scaling consideration without schema changes.
-Concurrent new requests store the same lowercase ASCII value, so the existing
-unique index resolves insert races. Only an email uniqueness violation
-is treated as an accepted duplicate; unrelated persistence errors return a safe
-503. Serialization/deadlock failures retry at most three independent attempts.
+Existing Unicode identities remain untouched. Reservation-key uniqueness resolves
+concurrent insert races. A fresh transaction must verify a durable reservation
+conflict before acknowledgment; User-email uniqueness errors fail closed.
+Unrelated persistence errors return a safe 503. Serialization/deadlock failures
+retry at most three independent attempts; unknown commit outcomes never retry.
 Future identity-creation or email-update paths must preserve this policy: the
 existing case-sensitive index alone cannot prevent differently cased legacy
 writes from a separate, noncompliant writer.
@@ -275,7 +271,9 @@ PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m pytest -p no:cacheprovider -q
 
 PostgreSQL registration tests reuse the established fixed-container identity and
 public-data preflight, check database names before writes, and use disposable
-schemas with explicit cleanup; they never run migrations:
+schemas with explicit cleanup. The Phase 1 migration is applied only inside those
+private schemas, followed by local backfill and verified readiness; the public
+schema and production databases are never migrated:
 
 ```bash
 SCRAPMART_RUN_LOCAL_POSTGRES_TESTS=1 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m pytest -p no:cacheprovider -q tests/test_buyer_signup_postgresql.py
@@ -289,7 +287,7 @@ inspected container IP, use random test-key namespaces and delete only those key
 SCRAPMART_RUN_LOCAL_REDIS_TESTS=1 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m pytest -p no:cacheprovider -q tests/test_signup_rate_limit_redis.py
 ```
 
-### Phase 1 email reservation schema (not enabled for registration)
+### Phase 1 email reservation schema (migration alone does not enable signup)
 
 Alembic revision `c42f7d18a903` follows `b81d4f2a9c06`. It adds
 `email_identity_reservations` and `email_identity_policy_state`. This is schema
@@ -378,7 +376,7 @@ Required runtime grants, using the deployment's actual schema/role names:
 GRANT USAGE ON SCHEMA public TO scrapmart_runtime;
 GRANT SELECT ON public.email_identity_reservations,
                 public.email_identity_policy_state TO scrapmart_runtime;
-GRANT INSERT (id, lookup_key, user_id)
+GRANT INSERT (id, lookup_key, user_id, state)
     ON public.email_identity_reservations TO scrapmart_runtime;
 -- PostgreSQL SELECT ... FOR SHARE requires UPDATE on at least one column.
 -- The singleton CHECK and reservation mutation trigger protect these ID columns.
@@ -397,8 +395,14 @@ fully qualified object references; no SECURITY DEFINER escalation is used.
 PostgreSQL checks trigger-function EXECUTE at trigger creation, not each firing;
 the restricted role does not need an EXECUTE grant on these functions.
 
-Only trusted maintenance may load blocked aliases or update policy state. It can
-bypass/drop guards as an object owner, so operational access control is essential.
+Buyer signup may insert new owned and blocked reservations atomically with a new
+User and BuyerProfile, using the narrow INSERT column grants above. Runtime may
+not modify, delete, reassign, or unblock existing reservations, or change policy
+readiness. The narrow UPDATE(id) grants support PostgreSQL FOR SHARE locking only;
+the reservation guard and policy singleton CHECK reject actual ID changes.
+Backfill, changes to existing reservations, readiness updates, and other maintenance
+operations remain restricted to trusted maintenance. Maintenance can bypass/drop
+guards as an object owner, so operational access control is essential.
 Maintenance must never delete/reuse reservation keys or remove blocked history;
 any exceptional destructive repair requires a separately reviewed migration and
 writer freeze. Existing User deletion is additionally restricted by deferred
@@ -419,3 +423,69 @@ Focused local validation (performs identity/revision/empty-table preflight):
 ```bash
 SCRAPMART_RUN_LOCAL_POSTGRES_TESTS=1 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m pytest -p no:cacheprovider -q tests/test_email_identity_postgresql.py
 ```
+
+
+### Buyer signup reservation integration
+
+`POST /api/v1/auth/buyer/signup` uses the committed V1 ASCII-only email policy,
+including canonical A-label domains and the complete compatibility-alias bundle.
+International names and passwords remain supported. Password hashing happens
+before database locks, for both new and duplicate requests. Unsupported policy
+libraries/tables fail closed with a safe HTTP 503; invalid email syntax yields
+credential-safe HTTP 422 validation errors.
+
+Each attempt owns a fresh engine-bound Session. The service locks the singleton
+policy row FOR SHARE and requires ready/version 1 before any reservation access.
+It performs a bounded indexed key lookup, inserts reservations in sorted order,
+then explicitly flushes User and BuyerProfile in the same transaction. The
+reservation-to-User foreign key stays deferred; the immediate User guard remains
+unchanged. Any existing owned OR blocked alias rejects the entire registration
+without modifying existing data. This conservative rule can reject otherwise
+distinct addresses sharing a compatibility alias. No User-table email scans,
+account linking, vendor creation, automatic login, sessions, or tokens are added.
+
+New and conflicting valid registrations return the same HTTP 202 body:
+`{"message":"If registration was successful, you can now sign in."}`. The frontend
+should offer a login link. Equal hashing avoids a large avoidable timing difference;
+database inserts, unique-index waits, and network scheduling still differ, so
+constant-time enumeration resistance is not claimed. Redis limits remain five
+attempts/hour per normalized email and twenty per verified client IP, with keyed
+identifier hashes, strict trusted-proxy handling, and fail-closed HTTP 503 behavior.
+Origin, CSRF, explicit CORS, JSON checks, safe validation, and no-store are retained.
+
+Confirmed serialization/deadlock aborts retry the complete transaction at most
+three times. An immediate reservation-key race rolls back everything, then a fresh
+attempt must recheck readiness and confirm a durable overlapping key. Other unique
+violations, missing/building registry state, permission failures, lock/statement
+timeouts, and unexpected inconsistencies produce safe HTTP 503. Unknown commit
+outcomes discard the connection and never trigger an automatic retry. A lost
+acknowledgment can mean the registration committed; no success response is emitted
+without a successful commit acknowledgment.
+
+Minimum signup runtime grants are the SELECT/USAGE and narrow UPDATE(id) locking
+grants above, plus INSERT(id,lookup_key,user_id,state) on reservations. The policy
+version uses its database default; runtime must not update policy state or existing
+reservation state/version/owner/key. Reservation IDs cannot change because of the guard;
+policy IDs cannot change because of the singleton CHECK. UPDATE(id) grants only
+support FOR SHARE and do not permit an actual ID change. The runtime also needs:
+
+```sql
+GRANT SELECT ON public.users, public.buyer_profiles TO scrapmart_runtime;
+GRANT INSERT (id,email,password_hash,full_name,phone_number,role,is_active)
+    ON public.users TO scrapmart_runtime;
+GRANT INSERT (id,user_id,created_at,signup_completed_at)
+    ON public.buyer_profiles TO scrapmart_runtime;
+```
+
+These are documentation examples, not executed production grants. Keep the runtime
+non-owner and non-administrative, audit inherited grants, and retain the separately
+required Stage 2B session privileges. Private PostgreSQL tests install the actual
+migration/guards and verify successful signup with only these signup grants,
+blocked mutations, real concurrency, and rollback. SQLite tests are boundary tests
+and do not prove PostgreSQL trigger/isolation behavior.
+
+Production rollout still requires approved role provisioning, writer freeze/drain,
+legacy backfill and verified readiness, and private Redis/proxy/Origin configuration.
+The committed maintenance tools remain local-only; this integration does not run
+production backfill or activate production readiness. Public-schema migrations and
+production grants are not performed by tests or signup.

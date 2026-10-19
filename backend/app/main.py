@@ -1,7 +1,10 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1.buyer_signup import router as buyer_signup_router
 from app.api.v1.health import router as health_router
 from app.core.config import get_settings
+from app.modules.auth.http_security import AuthNoStoreMiddleware, AuthRequestMiddleware
 
 
 def create_app() -> FastAPI:
@@ -14,6 +17,17 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(health_router, prefix="/api/v1")
+    app.include_router(buyer_signup_router, prefix="/api/v1")
+    app.add_middleware(AuthRequestMiddleware)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.auth_allowed_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type", "X-ScrapMart-CSRF"],
+        expose_headers=["Retry-After"],
+    )
+    app.add_middleware(AuthNoStoreMiddleware)
 
     return app
 

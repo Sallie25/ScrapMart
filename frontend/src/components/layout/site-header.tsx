@@ -19,8 +19,8 @@ export function SiteHeader({ variant = "default" }: SiteHeaderProps) {
   if (variant === "marketplace") {
     return (
       <>
-        <div className="bg-[#064d31] px-4 py-2 text-center text-xs font-bold leading-5 text-white">
-          PAY ON DELIVERY · Never pay before receiving your item
+        <div className="bg-[#064d31] px-4 py-2 text-center text-xs font-bold leading-4 text-white">
+          PAY ON DELIVERY · Shop safely with verified vendors
         </div>
         <header className="border-b border-[#dce4df] bg-white">
           <div className="mx-auto flex w-full max-w-[1536px] flex-wrap items-center justify-between gap-x-6 gap-y-3 px-4 py-3 sm:px-6 lg:px-8">
@@ -54,11 +54,14 @@ export function SiteHeader({ variant = "default" }: SiteHeaderProps) {
         <div className="mx-auto flex w-full max-w-[1304px] flex-wrap items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
           <Link
             href="/"
-            className="shrink-0 rounded-sm text-xl font-bold tracking-tight text-[#15221b] focus:outline-none focus:ring-2 focus:ring-[#087b40] focus:ring-offset-2"
+            className="inline-flex shrink-0 items-center gap-2 rounded-sm text-xl font-bold tracking-tight text-[#15221b] focus:outline-none focus:ring-2 focus:ring-[#087b40] focus:ring-offset-2"
           >
-            Scrap<span className="text-[#087b40]">Mart</span>
+            <span aria-hidden="true" className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#087b40] text-white">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-5 w-5"><path d="M4 10v10h16V10M3 10l2-6h14l2 6M8 20v-6h5v6M3 10c0 3 4 3 4 0 0 3 5 3 5 0 0 3 5 3 5 0 0 3 4 3 4 0" /></svg>
+            </span>
+            <span>Scrap<span className="text-[#087b40]">Mart</span></span>
           </Link>
-          <nav aria-label="Main navigation" className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <nav aria-label="Main navigation" className="flex flex-wrap items-center gap-x-1 gap-y-2">
             {navigationLinks.map((item) => (
               <Link
                 key={item.href}

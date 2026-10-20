@@ -1,4 +1,3 @@
-
 import Image from "next/image";
 import Link from "next/link";
 import { SiteHeader } from "@/components/layout/site-header";
@@ -35,7 +34,7 @@ export default function Home() {
 
       <main>
         {/* Hero */}
-        <section className="bg-[#f4f7f5] pb-16 pt-10 sm:pb-20 sm:pt-14 lg:pb-14 lg:pt-10">
+        <section className="bg-[#f4f7f5] pb-16 pt-10 sm:pb-20 sm:pt-14 lg:pb-16 lg:pt-16">
           <div className="mx-auto w-full max-w-[1304px] px-4 sm:px-6 lg:px-8">
             <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,1.088fr)_minmax(0,1fr)] lg:gap-[50px]">
               <div className="min-w-0">
@@ -44,7 +43,7 @@ export default function Home() {
                   Nigerian scrap marketplace
                 </p>
 
-                <h1 className="text-[42px] font-bold leading-[1.04] tracking-[-0.04em] text-[#15221b] sm:text-6xl lg:text-[clamp(48px,4.4vw,68px)]">
+                <h1 className="text-[42px] font-bold leading-[1.03] tracking-[-0.04em] text-[#15221b] sm:text-6xl lg:text-[clamp(48px,4.4vw,72px)]">
                   <span className="xl:whitespace-nowrap">Buy and sell scrap,</span>{" "}
                   <span className="text-[#087b40] lg:block">simply.</span>
                 </h1>
@@ -73,7 +72,7 @@ export default function Home() {
 
                 <div className="mt-8 flex flex-wrap gap-x-5 gap-y-3 text-sm font-semibold text-[#63736c]">
                   {[
-                    "Seller verification",
+                    "Browse scrap materials",
                     "Pay on delivery",
                     "Local marketplace",
                   ].map((label) => (
@@ -85,7 +84,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="relative min-w-0 pb-5">
+              <div className="relative min-w-0 pb-5 lg:ml-2">
                 {/* Temporary still image; the approved video treatment is deferred. */}
                 <div className="overflow-hidden rounded-[32px] bg-[#15221b] p-3 shadow-[0_28px_44px_-16px_rgba(21,34,27,0.38)]">
                   <Image
@@ -115,7 +114,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section aria-label="Marketplace reassurance" className="border-t border-[#dce4df] bg-white py-8">
+        <section aria-label="Marketplace reassurance" className="border-t border-[#dce4df] bg-white py-9">
           <div className="mx-auto grid w-full max-w-[1304px] gap-6 px-4 text-center sm:grid-cols-3 sm:px-6 lg:px-8">
             {[
               ["Browse materials", "Marketplace listings"],
@@ -131,8 +130,8 @@ export default function Home() {
         </section>
 
         {/* Categories */}
-        <section className="py-16 sm:py-20">
-          <Container>
+        <section className="bg-[#f4f7f5] py-16 sm:py-20">
+          <Container className="max-w-[1304px]">
             <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-wider text-[#438447]">
@@ -160,9 +159,9 @@ export default function Home() {
                 <Link
                   key={category.name}
                   href={category.href}
-                  className="group overflow-hidden rounded-2xl border border-[#e6e9e2] bg-white transition hover:-translate-y-1 hover:border-[#cbdcc5] hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[#347a3b] focus:ring-offset-2"
+                  className="group overflow-hidden rounded-2xl border border-[#dce4df] bg-white shadow-[0_8px_24px_-12px_rgba(21,34,27,0.16)] transition hover:-translate-y-1 hover:border-[#cbdcc5] hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[#347a3b] focus:ring-offset-2"
                 >
-                  <div className="relative h-52 overflow-hidden bg-[#f1f3ee]">
+                  <div className="relative h-60 overflow-hidden bg-[#f1f3ee]">
                     <Image
                       src={category.image}
                       alt={`${category.name} scrap materials`}
@@ -195,10 +194,10 @@ export default function Home() {
         </section>
 
         {/* Buyer and seller paths */}
-        <section className="pb-16 sm:pb-20">
-          <Container>
+        <section className="bg-[#f4f7f5] pb-16 sm:pb-20">
+          <Container className="max-w-[1304px]">
             <div className="grid gap-6 md:grid-cols-2">
-              <div className="rounded-2xl bg-[#edf4e9] p-7 sm:p-9">
+              <div className="rounded-3xl border border-[#dce4df] bg-[#e8f6ee] p-7 sm:p-9">
                 <p className="text-sm font-semibold uppercase tracking-wider text-[#438447]">
                   For buyers
                 </p>
@@ -217,7 +216,7 @@ export default function Home() {
                 </Link>
               </div>
 
-              <div className="rounded-2xl bg-[#f5f2e9] p-7 sm:p-9">
+              <div className="rounded-3xl border border-[#e9e1ce] bg-[#faf6eb] p-7 sm:p-9">
                 <p className="text-sm font-semibold uppercase tracking-wider text-[#80622c]">
                   For sellers
                 </p>
@@ -241,7 +240,7 @@ export default function Home() {
 
         {/* Payment reassurance */}
         <section className="border-t border-[#e8ebe5] bg-white py-10">
-          <Container>
+          <Container className="max-w-[1304px]">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-lg font-bold text-[#263126]">

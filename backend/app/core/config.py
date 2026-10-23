@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     database_url: str | None = None
     redis_url: SecretStr = SecretStr("redis://redis:6379/0")
     signup_rate_limit_secret: SecretStr | None = None
+    login_rate_limit_secret: SecretStr | None = None
     auth_allowed_origins: list[str] = []
     auth_trusted_proxy_cidrs: list[str] = []
 

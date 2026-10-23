@@ -13,6 +13,7 @@ class AuthRequestMiddleware:
             return
 
         response_started = False
+        operation = "Login" if scope["path"] == "/api/v1/auth/buyer/login" else "Registration"
 
         async def no_store(message: Message) -> None:
             nonlocal response_started
@@ -28,11 +29,11 @@ class AuthRequestMiddleware:
                     raise
                 # Never include exception text, request bodies, headers or locals.
                 response = JSONResponse(status_code=500, content={"detail": {
-                    "code": "internal_error", "message": "Registration could not be completed", "fields": [],
+                    "code": "internal_error", "message": f"{operation} could not be completed", "fields": [],
                 }})
                 await response(scope, source, no_store)
 
-        if scope["path"] == "/api/v1/auth/buyer/signup" and scope["method"] == "POST":
+        if scope["path"] in {"/api/v1/auth/buyer/signup", "/api/v1/auth/buyer/login"} and scope["method"] == "POST":
             body = bytearray()
             while True:
                 message = await receive()
@@ -41,7 +42,7 @@ class AuthRequestMiddleware:
                 body.extend(message.get("body", b""))
                 if len(body) > 16384:
                     response = JSONResponse(status_code=413, content={"detail": {
-                        "code": "request_too_large", "message": "Registration request is too large", "fields": [],
+                        "code": "request_too_large", "message": f"{operation} request is too large", "fields": [],
                     }})
                     await response(scope, receive, no_store)
                     return

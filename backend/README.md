@@ -489,3 +489,63 @@ legacy backfill and verified readiness, and private Redis/proxy/Origin configura
 The committed maintenance tools remain local-only; this integration does not run
 production backfill or activate production readiness. Public-schema migrations and
 production grants are not performed by tests or signup.
+
+### Buyer login Phase 1A: unresolved runtime locking prerequisite
+
+The login admission query selects `buyer_profiles.id`, filters on `user_id`, and
+uses `FOR SHARE` after locking policy, reservation, and User, before inserting
+session/token records. PostgreSQL requires schema USAGE, SELECT on the referenced
+columns, and UPDATE on at least one column of BuyerProfile for this row lock.
+See the [PostgreSQL 16 privilege documentation](https://www.postgresql.org/docs/16/ddl-priv.html).
+The documented signup grants supply SELECT and INSERT on BuyerProfile, but no
+UPDATE privilege. The documented locking UPDATE grants cover only policy and
+reservation; Stage 2B's `users.updated_at` grant does not cover BuyerProfile.
+Repository configuration therefore does not establish a sufficient restricted
+runtime privilege contract for login. These examples do not establish live grants.
+
+Deployment requires a separately reviewed BuyerProfile locking permission contract
+and validation with the actual non-owner runtime role in an isolated schema.
+A column-scoped UPDATE permission is narrower than table-wide UPDATE, but would
+also permit actual writes to that column: unlike registry IDs, BuyerProfile IDs
+have no immutable-ID guard. Do not assume UPDATE(id) is lock-only or grant it
+without reviewing the mutation it allows. No roles or grants were changed by
+this review.
+
+`FOR KEY SHARE` can protect existence/key identity against DELETE and key changes,
+but still requires UPDATE permission. Other row-lock strengths do too. A plain
+SELECT permits concurrent profile deletion; the existing User lock alone does
+not block direct BuyerProfile deletion. Advisory locks require cooperation from
+every writer and do not replace the current protection. No less privileged row
+locking substitute has been established that preserves this concurrency contract;
+retain the current lock ordering and bounded transaction retries.
+
+Phase 1A PostgreSQL tests were skipped because the original shared fixture read
+public tables and private-schema DDL was not authorized. Buyer login now has a
+separate fixture in `tests/buyer_login_postgresql_support.py`. It verifies the
+fixed local Docker container/server using `pg_catalog`, qualifies application
+tables into an unpredictable private schema, and excludes public from search
+paths. Identity and ownership checks use explicit exceptions; optimized Python
+is rejected. Cleanup compares recorded object identities and uses ordered
+`RESTRICT` drops in one transaction. Unexpected objects/dependencies stop cleanup.
+An uncertain creation/cleanup outcome reports the schema name for manual review;
+never broaden cleanup or delete unverified resources automatically.
+
+Only after explicit authorization of local private-schema DDL, run this module
+alone, without parallel workers or other activity in the disposable environment:
+
+```bash
+SCRAPMART_RUN_LOCAL_POSTGRES_TESTS=1 SCRAPMART_RUN_BUYER_LOGIN_POSTGRES_TESTS=1 SCRAPMART_RUN_LOCAL_REDIS_TESTS=0 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m pytest -p no:cacheprovider -q tests/test_buyer_login_postgresql.py
+```
+
+Do not use these opt-ins for an unrestricted suite under a no-public-access
+constraint: older PostgreSQL fixtures still read public relations. The Buyer
+fixture installs the actual registry guards/constraints but omits the migration's
+known ACL revocations on newly created private objects; it executes no GRANT or
+REVOKE statements and creates no roles. This owner-backed validation does not
+establish restricted-runtime permissions or validate the migration ACL contract.
+That deployment prerequisite remains unresolved above.
+
+Concurrency tests cover Read Committed, Repeatable Read, and Serializable,
+confirm actual blocker relationships, and exercise deactivation, password
+changes, logout-all, and both orderings of profile deletion/reassignment against
+admission. Offline tests alone do not establish PostgreSQL correctness.

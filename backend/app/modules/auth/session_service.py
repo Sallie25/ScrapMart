@@ -1,4 +1,4 @@
-"""Database session services. No HTTP, JWT issuance, or profile permissions.
+"""Database session services. No HTTP or JWT issuance.
 
 Each attempt constructs a NEW engine-bound SQLAlchemy Session/transaction.
 Only a synchronous Engine is accepted; Sessions, Connections and factories are
@@ -19,6 +19,10 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.modules.auth.models import User
+from app.modules.auth.email_identity_models import EmailIdentityReservation as Reservation
+from app.modules.auth.email_identity_policy import canonical_registration_key
+from app.modules.auth.login_policy import require_ready_registry, stored_email_matches
+from app.modules.buyers.models import BuyerProfile
 from app.modules.auth.security import (
     AccessTokenClaims,
     InvalidRefreshTokenError,
@@ -124,7 +128,7 @@ class SessionService:
                 if getattr(error.orig, "sqlstate", None) in {"40001", "40P01"} and attempt < 2:
                     continue
                 raise SessionPersistenceError() from None
-            except SQLAlchemyError:
+            except (SQLAlchemyError, OSError):
                 raise SessionPersistenceError() from None
         raise SessionPersistenceError()  # Defensive; every attempt returns/raises.
 
@@ -163,33 +167,72 @@ class SessionService:
         ):
             raise SessionAuthenticationError()
 
-    def create_session(self, user_id: uuid.UUID) -> SessionCredentials:
-        """Call only after authenticating the existing identity; never links by email."""
-        user_id = _require_uuid(user_id)
+    def _session_lifetime(self) -> timedelta:
         settings = self._settings if self._settings is not None else get_settings()
         days = settings.auth_session_expire_days
         if type(days) is not int or days <= 0:
             raise SecurityConfigurationError("Session lifetime must be a positive number of days")
         try:
-            lifetime = timedelta(days=days)
+            return timedelta(days=days)
         except OverflowError:
             raise SecurityConfigurationError("Session lifetime is outside the supported range") from None
 
+    def _create_session_records(self, db: Session, user_id: uuid.UUID, lifetime: timedelta) -> SessionCredentials:
+        """User lock and all caller-specific admission checks must precede this."""
+        now = self._now(db)
+        try:
+            expiry = now + lifetime
+        except OverflowError:
+            raise SecurityConfigurationError("Session lifetime is outside the supported range") from None
+        session = AuthSession(id=uuid.uuid4(), user_id=user_id, created_at=now, expires_at=expiry)
+        plaintext = generate_refresh_token()
+        db.add(RefreshToken(
+            session=session, token_digest=digest_refresh_token(plaintext),
+            created_at=now, expires_at=expiry,
+        ))
+        return SessionCredentials(user_id, session.id, expiry, plaintext)
+
+    def create_session(self, user_id: uuid.UUID) -> SessionCredentials:
+        """Call only after authenticating the existing identity; never links by email."""
+        user_id = _require_uuid(user_id)
+        lifetime = self._session_lifetime()
+
         def operation(db: Session) -> SessionCredentials:
             self._active_user(self._lock_user(db, user_id))
-            now = self._now(db)
-            try:
-                expiry = now + lifetime
-            except OverflowError:
-                raise SecurityConfigurationError("Session lifetime is outside the supported range") from None
-            session = AuthSession(id=uuid.uuid4(), user_id=user_id, created_at=now, expires_at=expiry)
-            plaintext = generate_refresh_token()
-            token = RefreshToken(
-                session=session, token_digest=digest_refresh_token(plaintext),
-                created_at=now, expires_at=expiry,
-            )
-            db.add(token)
-            return SessionCredentials(user_id, session.id, expiry, plaintext)
+            return self._create_session_records(db, user_id, lifetime)
+
+        return self._transaction(operation)
+
+    def admit_buyer_session(self, user_id: uuid.UUID, key: str, verified_password_hash: str) -> SessionCredentials:
+        """Trusted credential verifier only: the supplied hash must have verified.
+
+        Policy SHARE → reservation SHARE → User version update → Buyer SHARE,
+        then the existing User → AuthSession → RefreshToken creation sequence.
+        Locks survive through commit; no password verification runs under them.
+        """
+        user_id = _require_uuid(user_id)
+        if canonical_registration_key(key) != key or not isinstance(verified_password_hash, str):
+            raise SessionAuthenticationError()
+        lifetime = self._session_lifetime()
+
+        def operation(db: Session) -> SessionCredentials:
+            require_ready_registry(db)
+            reservation = db.scalar(select(Reservation.id).where(
+                Reservation.lookup_key == key, Reservation.state == "owned",
+                Reservation.policy_version == 1, Reservation.user_id == user_id,
+            ).with_for_update(read=True))
+            if reservation is None:
+                raise SessionAuthenticationError()
+            user = self._lock_user(db, user_id)
+            self._active_user(user)
+            if user.password_hash != verified_password_hash or not stored_email_matches(user.email, key):
+                raise SessionAuthenticationError()
+            buyer = db.scalar(select(BuyerProfile.id).where(
+                BuyerProfile.user_id == user_id,
+            ).with_for_update(read=True))
+            if buyer is None:
+                raise SessionAuthenticationError()
+            return self._create_session_records(db, user_id, lifetime)
 
         return self._transaction(operation)
 

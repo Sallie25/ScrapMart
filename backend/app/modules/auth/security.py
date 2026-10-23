@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 import jwt
+from argon2 import PasswordHasher as Argon2PasswordHasher, extract_parameters
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 from pwdlib import PasswordHash
 from pwdlib.exceptions import UnknownHashError
 from pwdlib.hashers.argon2 import Argon2Hasher
@@ -27,6 +29,11 @@ JWT_ALGORITHM = "HS256"
 _REQUIRED_CLAIMS = ("sub", "sid", "jti", "iss", "aud", "iat", "nbf", "exp", "type")
 _URLSAFE_32_BYTES = re.compile(r"[A-Za-z0-9_-]{43}", re.ASCII)
 _password_hasher = PasswordHash((Argon2Hasher(parallelism=1),))
+# pwdlib intentionally folds malformed encodings and mismatches into False.
+# Login needs the native verifier's distinction to supply dummy work only for
+# unusable hashes. Verification uses the encoded hash's parameters and supports
+# the same Argon2id/i/d legacy variants as the configured pwdlib hasher.
+_argon2_login_verifier = Argon2PasswordHasher(parallelism=1)
 
 
 class PasswordPolicyError(ValueError):
@@ -90,12 +97,32 @@ def hash_password(password: str) -> str:
     return _password_hasher.hash(password)
 
 
-def verify_password(password: str, stored_hash: str) -> bool:
+def verify_password(password: str, stored_hash: str, *, dummy_hash: str | None = None) -> bool:
+    """Optionally perform dummy verification when the stored hash is unusable.
+
+    A genuine mismatch already did the required Argon2 work. A successful dummy
+    comparison must never authenticate the account. The dummy is trusted caller
+    configuration, not another submitted credential or stored account hash.
+    """
     # Minimum signup length is not reapplied to existing passwords at login.
     if not _password_input_valid(password):
         return False
     if not isinstance(stored_hash, str) or len(stored_hash) > 1024:
+        if dummy_hash is not None:
+            verify_password(password, dummy_hash)
         return False
+    if dummy_hash is not None:
+        try:
+            # Some native implementations compute even for unknown version
+            # numbers. Only standardized legacy/current encodings are supported.
+            if extract_parameters(stored_hash).version not in {16, 19}:
+                raise InvalidHashError("Unsupported Argon2 version")
+            return _argon2_login_verifier.verify(stored_hash, password)
+        except VerifyMismatchError:
+            return False
+        except (InvalidHashError, VerificationError, ValueError, TypeError, UnicodeError):
+            verify_password(password, dummy_hash)
+            return False
     try:
         return _password_hasher.verify(password, stored_hash)
     except (UnknownHashError, ValueError, TypeError):

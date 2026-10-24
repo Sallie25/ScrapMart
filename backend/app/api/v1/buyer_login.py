@@ -1,7 +1,5 @@
 """Buyer login HTTP boundary; authentication and admission remain in Phase 1."""
 import json
-import math
-from datetime import datetime, timezone
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -16,12 +14,11 @@ from app.modules.auth.login_policy import BuyerLoginUnavailableError, InvalidBuy
 from app.modules.auth.login_rate_limit import get_login_rate_limiter
 from app.modules.auth.login_schemas import BuyerLoginRequest
 from app.modules.auth.login_service import BuyerLoginService
+from app.modules.auth.http_security import REFRESH_COOKIE, REFRESH_COOKIE_PATH, require_origin_csrf, set_refresh_cookie
 from app.modules.auth.security import SecurityConfigurationError, _token_config, create_access_token
 from app.modules.auth.signup_rate_limit import RateLimitUnavailableError, SignupRateLimitedError
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
-REFRESH_COOKIE = "__Secure-scrapmart_refresh"
-REFRESH_COOKIE_PATH = "/api/v1/auth"
 
 
 class BuyerLoginResponse(BaseModel):
@@ -44,11 +41,7 @@ def enforce_limit(kind: str, value: str) -> None:
 
 
 def login_guard(request: Request, settings: Annotated[Settings, Depends(get_settings)]) -> None:
-    origins = request.headers.getlist("origin")
-    if len(origins) != 1 or origins[0] not in settings.auth_allowed_origins:
-        fail(403, "origin_rejected", "Request origin is not permitted")
-    if request.headers.getlist("x-scrapmart-csrf") != ["1"]:
-        fail(403, "csrf_rejected", "Required request header is missing or invalid")
+    require_origin_csrf(request, settings)
     content_types = request.headers.getlist("content-type")
     if len(content_types) != 1 or content_types[0].split(";", 1)[0].strip().lower() != "application/json":
         fail(415, "unsupported_media_type", "Use application/json")
@@ -114,8 +107,5 @@ def buyer_login(login: Annotated[BuyerLoginRequest, Depends(login_input)], respo
                             headers={"Cache-Control": "no-store", "WWW-Authenticate": "Bearer"}) from None
     except (BuyerLoginUnavailableError, SecurityConfigurationError):
         unavailable()
-    remaining = max(0, math.floor((credentials.expires_at - datetime.now(timezone.utc)).total_seconds()))
-    response.set_cookie(REFRESH_COOKIE, credentials.refresh_token, max_age=remaining,
-                        expires=credentials.expires_at, path=REFRESH_COOKIE_PATH,
-                        secure=True, httponly=True, samesite="lax")
+    set_refresh_cookie(response, credentials)
     return BuyerLoginResponse(access_token=access, expires_in=token_config.lifetime_seconds)

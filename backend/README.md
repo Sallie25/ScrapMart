@@ -8,8 +8,8 @@ already installed in `.venv`.
 
 ## Authentication security foundation (Stage 2A)
 
-Buyer registration is implemented in Stage 2C.1 below. Login, refresh and logout
-HTTP endpoints are not implemented yet.
+Buyer registration, login, refresh and logout HTTP endpoints are implemented in
+Stages 2C.1–2C.3. See the session HTTP contract below.
 The helpers in `app/modules/auth/security.py` do not access the database.
 JWT validation alone does not establish a live session or account permissions.
 
@@ -56,7 +56,7 @@ bytes. Persist only `digest_refresh_token(token)`, a 32-byte SHA-256 digest matc
 the `RefreshToken.token_digest` column. Never persist the opaque bearer value or
 put it in logs. `AuthSession` and `RefreshToken` persistence models exist from
 Stage 1. Stage 2B adds the services described below. Buyer registration is
-implemented in Stage 2C.1; cookies and session HTTP endpoints are not implemented.
+implemented in Stage 2C.1; login and cookie session endpoints use these services.
 
 Focused offline checks: the 222-test subset below excludes `tests/test_health.py`
 and is not the full suite. No external database or services required; database
@@ -167,8 +167,8 @@ For both new and already registered valid emails, the response is **202 Accepted
 
 Both paths return the same status, body and relevant headers, including
 `Cache-Control: no-store`, without IDs, cookies, hashes or tokens. The frontend
-should display this acknowledgment and offer a login link. Login itself is not
-implemented. No authentication sessions, refresh tokens or Vendor profiles are
+should display this acknowledgment and offer a login link. No authentication
+sessions, refresh tokens or Vendor profiles are
 created by registration. An existing identity is never modified or linked, and
 an existing Vendor is never silently granted a Buyer profile.
 
@@ -211,7 +211,7 @@ origins are rejected. No Vercel preview/domain wildcard is trusted automatically
 POST requires exactly one allowed `Origin` and `X-ScrapMart-CSRF: 1`, including for
 nonbrowser clients in this phase. Form submissions are rejected. CORS explicitly
 allows GET/POST/OPTIONS and Content-Type/X-ScrapMart-CSRF with credentials enabled;
-the only exposed custom response header is Retry-After. There are no auth cookies
+the only exposed custom response header is Retry-After. Signup does not set auth cookies
 in this phase; `credentials: include` is not required for signup. Use HTTPS in
 production. Browser tests must use a configured local origin during development.
 
@@ -549,3 +549,50 @@ Concurrency tests cover Read Committed, Repeatable Read, and Serializable,
 confirm actual blocker relationships, and exercise deactivation, password
 changes, logout-all, and both orderings of profile deletion/reassignment against
 admission. Offline tests alone do not establish PostgreSQL correctness.
+
+## Session refresh and logout HTTP (Stage 2C.3)
+
+`POST /api/v1/auth/refresh` and `POST /api/v1/auth/logout` accept credentials only
+from the `__Secure-scrapmart_refresh` cookie established by Buyer login. Neither
+endpoint accepts tokens from JSON, query parameters, or Authorization headers.
+No request body or Content-Type is required. Both require exactly one configured
+Origin and `X-ScrapMart-CSRF: 1`, including nonbrowser clients. Authentication
+responses, CORS preflights, and errors use `Cache-Control: no-store`. Request
+bodies are bounded to 16 KiB. Rejected browser guards do not clear cookies.
+
+Refresh returns 200 with `access_token`, `token_type: "bearer"`, and `expires_in`
+(seconds), using the existing JWT signing settings and helpers. It atomically
+consumes the old refresh token and stores only the replacement's digest. The new
+cookie is Secure, HttpOnly, SameSite=Lax, host-only, Path=/api/v1/auth, and expires
+at the original session expiry. Rotation does not extend that expiry. Missing,
+malformed, ambiguous duplicate, expired, revoked, unknown, or replayed credentials
+receive the same generic 401 and a matching-scope cookie deletion. Replaying a
+consumed token commits revocation of the whole session before returning 401;
+the replacement token also becomes unusable. Clients must serialize refreshes.
+
+Logout returns an empty 204 and clears the cookie for valid, missing, malformed,
+unknown, expired, inactive, and already-revoked credentials. A retained consumed
+token may revoke its own session but never authenticate. The minimal service
+extension `revoke_refresh_session` identifies the session by token digest and
+retains User -> AuthSession -> RefreshToken lock ordering and bounded retries.
+It does not rotate, create records, delete history, or revoke other sessions.
+Protected requests must continue validating live session state after JWT checks;
+logout does not alter the cryptographic validity of an already issued JWT.
+
+Database/persistence failures return a generic 503 and retain the cookie so a
+client can retry; unexpected failures return a safe 500. Signing configuration
+is checked before refresh consumes a token. Logout needs no signing secret.
+These lifecycle endpoints do not consume signup/login Redis budgets or introduce
+a new Redis dependency; existing signup/login limits remain unchanged. Browser
+clients need HTTPS and credentials-enabled requests under the same-site cookie
+policy. Runtime database permissions remain a deployment prerequisite.
+
+Run focused offline validation with external integrations disabled:
+
+```bash
+SCRAPMART_RUN_LOCAL_POSTGRES_TESTS=0 SCRAPMART_RUN_BUYER_LOGIN_POSTGRES_TESTS=0 SCRAPMART_RUN_LOCAL_REDIS_TESTS=0 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m pytest -p no:cacheprovider -q tests/test_buyer_sessions_http.py tests/test_auth_sessions.py tests/test_buyer_login_http.py tests/test_buyer_signup.py
+```
+
+The concurrent HTTP test uses separate SQLite connections to verify HTTP outcome
+and persisted replay revocation; it does not establish PostgreSQL isolation
+correctness. No PostgreSQL or Redis integration run is implied by offline success.

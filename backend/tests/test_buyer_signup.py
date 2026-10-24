@@ -223,7 +223,9 @@ def test_cors_exact_origins_and_health(signup_store):
     bad = signup_store.client.options(URL, headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "POST"})
     assert bad.status_code == 400 and "access-control-allow-origin" not in bad.headers
     assert signup_store.client.get("/api/v1/health").status_code == 200
-    for path in ("login", "refresh", "logout", "logout-all", "me"):
+    for path in ("refresh", "logout"):
+        assert signup_store.client.post("/api/v1/auth/" + path).status_code == 403
+    for path in ("login", "logout-all", "me"):
         assert signup_store.client.post("/api/v1/auth/" + path).status_code == 404
 
 

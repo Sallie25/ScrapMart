@@ -1,6 +1,42 @@
 """Bound credential-body parsing and prevent caching auth responses."""
-from starlette.responses import JSONResponse
+import math
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING
+
+from fastapi import HTTPException
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+from app.core.config import Settings
+
+if TYPE_CHECKING:
+    from app.modules.auth.session_service import SessionCredentials
+
+REFRESH_COOKIE = "__Secure-scrapmart_refresh"
+REFRESH_COOKIE_PATH = "/api/v1/auth"
+
+
+def require_origin_csrf(request: Request, settings: Settings) -> None:
+    origins = request.headers.getlist("origin")
+    if len(origins) != 1 or origins[0] not in settings.auth_allowed_origins:
+        raise HTTPException(403, detail={"code": "origin_rejected", "message": "Request origin is not permitted", "fields": []},
+                            headers={"Cache-Control": "no-store"})
+    if request.headers.getlist("x-scrapmart-csrf") != ["1"]:
+        raise HTTPException(403, detail={"code": "csrf_rejected", "message": "Required request header is missing or invalid", "fields": []},
+                            headers={"Cache-Control": "no-store"})
+
+
+def set_refresh_cookie(response: Response, credentials: "SessionCredentials") -> None:
+    remaining = max(0, math.floor((credentials.expires_at - datetime.now(timezone.utc)).total_seconds()))
+    response.set_cookie(REFRESH_COOKIE, credentials.refresh_token, max_age=remaining,
+                        expires=credentials.expires_at, path=REFRESH_COOKIE_PATH,
+                        secure=True, httponly=True, samesite="lax")
+
+
+def clear_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(REFRESH_COOKIE, path=REFRESH_COOKIE_PATH,
+                           secure=True, httponly=True, samesite="lax")
 
 
 class AuthRequestMiddleware:
@@ -13,7 +49,9 @@ class AuthRequestMiddleware:
             return
 
         response_started = False
-        operation = "Login" if scope["path"] == "/api/v1/auth/buyer/login" else "Registration"
+        operations = {"/api/v1/auth/buyer/signup": "Registration", "/api/v1/auth/buyer/login": "Login",
+                      "/api/v1/auth/refresh": "Refresh", "/api/v1/auth/logout": "Logout"}
+        operation = operations.get(scope["path"], "Registration")
 
         async def no_store(message: Message) -> None:
             nonlocal response_started
@@ -33,7 +71,7 @@ class AuthRequestMiddleware:
                 }})
                 await response(scope, source, no_store)
 
-        if scope["path"] in {"/api/v1/auth/buyer/signup", "/api/v1/auth/buyer/login"} and scope["method"] == "POST":
+        if scope["path"] in operations and scope["method"] == "POST":
             body = bytearray()
             while True:
                 message = await receive()

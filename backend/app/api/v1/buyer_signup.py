@@ -10,6 +10,7 @@ from starlette.concurrency import run_in_threadpool
 from app.core.config import Settings, get_settings
 from app.infrastructure.database.session import get_engine
 from app.modules.auth.email_identity_policy import PolicyVersionMismatch
+from app.modules.auth.http_security import require_origin_csrf
 from app.modules.auth.registration_schemas import (
     BuyerSignupAcknowledgment, BuyerSignupRequest, normalize_signup_email,
 )
@@ -68,11 +69,7 @@ def enforce_limit(kind: str, value: str) -> None:
 
 
 def registration_guard(request: Request, settings: Annotated[Settings, Depends(get_settings)]) -> None:
-    origins = request.headers.getlist("origin")
-    if len(origins) != 1 or origins[0] not in settings.auth_allowed_origins:
-        fail(403, "origin_rejected", "Request origin is not permitted")
-    if request.headers.getlist("x-scrapmart-csrf") != ["1"]:
-        fail(403, "csrf_rejected", "Required request header is missing or invalid")
+    require_origin_csrf(request, settings)
     content_types = request.headers.getlist("content-type")
     if len(content_types) != 1 or content_types[0].split(";", 1)[0].strip().lower() != "application/json":
         fail(415, "unsupported_media_type", "Use application/json")

@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.buyer_signup import router as buyer_signup_router
 from app.api.v1.buyer_login import router as buyer_login_router
+from app.api.v1.buyer_sessions import router as buyer_sessions_router
 from app.api.v1.health import router as health_router
 from app.core.config import get_settings
 from app.modules.auth.http_security import AuthNoStoreMiddleware, AuthRequestMiddleware
@@ -20,6 +21,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(buyer_signup_router, prefix="/api/v1")
     app.include_router(buyer_login_router, prefix="/api/v1")
+    app.include_router(buyer_sessions_router, prefix="/api/v1")
     app.add_middleware(AuthRequestMiddleware)
     app.add_middleware(
         CORSMiddleware,

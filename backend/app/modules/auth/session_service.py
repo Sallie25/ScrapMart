@@ -320,6 +320,41 @@ class SessionService:
 
         return self._transaction(operation)
 
+    def revoke_refresh_session(self, plaintext: str) -> bool:
+        """Cookie logout: any issued family token may revoke its own session.
+
+        Consumed tokens remain valid for revocation, never for authentication.
+        Expired/inactive identities can still log out. No session/token is
+        created or rotated; the existing User -> session -> token order applies.
+        """
+        try:
+            digest = digest_refresh_token(plaintext)
+        except InvalidRefreshTokenError:
+            return False
+
+        def operation(db: Session) -> bool:
+            candidate = db.execute(select(RefreshToken.id, RefreshToken.session_id, AuthSession.user_id).join(
+                AuthSession, AuthSession.id == RefreshToken.session_id,
+            ).where(RefreshToken.token_digest == digest)).one_or_none()
+            if candidate is None:
+                return False
+            token_id, session_id, user_id = candidate
+            self._lock_user(db, user_id)
+            session = self._lock_session(db, user_id, session_id)
+            token = db.scalar(select(RefreshToken.id).where(
+                RefreshToken.id == token_id, RefreshToken.session_id == session_id,
+                RefreshToken.token_digest == digest,
+            ).with_for_update())
+            if token is None or session.revoked_at is not None:
+                return False
+            now = self._now(db)
+            if now < _utc(session.created_at, db):
+                raise SessionAuthenticationError()
+            session.revoked_at = now
+            return True
+
+        return self._transaction(operation)
+
     def revoke_all_sessions(self, user_id: uuid.UUID) -> int:
         user_id = _require_uuid(user_id)
 

@@ -50,7 +50,8 @@ class AuthRequestMiddleware:
 
         response_started = False
         operations = {"/api/v1/auth/buyer/signup": "Registration", "/api/v1/auth/buyer/login": "Login",
-                      "/api/v1/auth/refresh": "Refresh", "/api/v1/auth/logout": "Logout"}
+                      "/api/v1/auth/refresh": "Refresh", "/api/v1/auth/logout": "Logout",
+                      "/api/v1/auth/me": "Profile request", "/api/v1/auth/logout-all": "Logout"}
         operation = operations.get(scope["path"], "Registration")
 
         async def no_store(message: Message) -> None:

@@ -60,6 +60,14 @@ class SessionCredentials(SessionIdentity):
     refresh_token: str = field(repr=False)
 
 
+@dataclass(frozen=True)
+class BuyerAccountProfile:
+    email: str = field(repr=False)
+    full_name: str = field(repr=False)
+    phone_number: str | None = field(repr=False)
+    signup_completed_at: datetime
+
+
 _T = TypeVar("_T")
 _REPLAY = object()
 
@@ -256,6 +264,35 @@ class SessionService:
 
         return self._transaction(operation)
 
+    def get_buyer_profile(self, claims: AccessTokenClaims) -> BuyerAccountProfile:
+        """Trusted JWT verifier only; live session and profile share one read.
+
+        Project only approved account fields, activation, and session state.
+        No password hash is loaded and no ORM objects escape the transaction.
+        """
+        if not isinstance(claims, AccessTokenClaims):
+            raise SessionAuthenticationError()
+        user_id = _require_uuid(claims.user_id)
+        session_id = _require_uuid(claims.session_id)
+
+        def operation(db: Session) -> BuyerAccountProfile:
+            row = db.execute(select(
+                User.is_active, User.email, User.full_name, User.phone_number,
+                BuyerProfile.signup_completed_at, AuthSession,
+            ).select_from(User).join(AuthSession, AuthSession.user_id == User.id).join(
+                BuyerProfile, BuyerProfile.user_id == User.id,
+            ).where(User.id == user_id, AuthSession.id == session_id)).one_or_none()
+            if row is None or not row.is_active:
+                raise SessionAuthenticationError()
+            now = self._now(db)
+            self._active_session(db, row.AuthSession, now)
+            if claims.expires_at <= now:
+                raise SessionAuthenticationError()
+            return BuyerAccountProfile(row.email, row.full_name, row.phone_number,
+                                       _utc(row.signup_completed_at, db))
+
+        return self._transaction(operation)
+
     def rotate_refresh_token(self, plaintext: str) -> SessionCredentials:
         try:
             digest = digest_refresh_token(plaintext)
@@ -361,10 +398,46 @@ class SessionService:
         def operation(db: Session) -> int:
             self._active_user(self._lock_user(db, user_id))
             now = self._now(db)
-            result = db.execute(update(AuthSession).where(
-                AuthSession.user_id == user_id, AuthSession.revoked_at.is_(None),
-                AuthSession.expires_at > now,
-            ).values(revoked_at=now))
-            return result.rowcount
+            return self._revoke_all_session_records(db, user_id, now)
 
         return self._transaction(operation)
+
+    @staticmethod
+    def _revoke_all_session_records(db: Session, user_id: uuid.UUID, now: datetime) -> int:
+        result = db.execute(update(AuthSession).where(
+            AuthSession.user_id == user_id, AuthSession.revoked_at.is_(None),
+            AuthSession.expires_at > now,
+        ).values(revoked_at=now).execution_options(synchronize_session=False))
+        # Expiry is evaluated by the database, not against cached ORM timestamps
+        # (SQLite strips tzinfo). No ORM state is returned; commit expires it.
+        return result.rowcount
+
+    def revoke_all_buyer_sessions(self, claims: AccessTokenClaims) -> None:
+        """Authorize and revoke atomically using the existing logout-all SQL.
+
+        User version update -> current session -> Buyer SHARE -> session update.
+        An authentication check in a prior transaction would permit revoked
+        credentials to revoke later sessions after waiting for the User lock.
+        """
+        if not isinstance(claims, AccessTokenClaims):
+            raise SessionAuthenticationError()
+        user_id = _require_uuid(claims.user_id)
+        session_id = _require_uuid(claims.session_id)
+
+        def operation(db: Session) -> None:
+            self._active_user(self._lock_user(db, user_id))
+            session = self._lock_session(db, user_id, session_id)
+            buyer = db.scalar(select(BuyerProfile.id).where(
+                BuyerProfile.user_id == user_id,
+            ).with_for_update(read=True))
+            if buyer is None:
+                raise SessionAuthenticationError()
+            # Sample time after every lock, including a potentially waiting
+            # Buyer lock. JWT verification happened before this transaction.
+            now = self._now(db)
+            self._active_session(db, session, now)
+            if claims.expires_at <= now:
+                raise SessionAuthenticationError()
+            self._revoke_all_session_records(db, user_id, now)
+
+        self._transaction(operation)

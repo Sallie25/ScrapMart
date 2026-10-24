@@ -9,7 +9,8 @@ already installed in `.venv`.
 ## Authentication security foundation (Stage 2A)
 
 Buyer registration, login, refresh and logout HTTP endpoints are implemented in
-Stages 2C.1–2C.3. See the session HTTP contract below.
+Stages 2C.1–2C.3. Authenticated Buyer profile and logout-all are implemented in
+Stage 2C.4. See the HTTP contracts below.
 The helpers in `app/modules/auth/security.py` do not access the database.
 JWT validation alone does not establish a live session or account permissions.
 
@@ -210,7 +211,7 @@ production. Empty configuration denies signup. Wildcards and non-loopback HTTP
 origins are rejected. No Vercel preview/domain wildcard is trusted automatically.
 POST requires exactly one allowed `Origin` and `X-ScrapMart-CSRF: 1`, including for
 nonbrowser clients in this phase. Form submissions are rejected. CORS explicitly
-allows GET/POST/OPTIONS and Content-Type/X-ScrapMart-CSRF with credentials enabled;
+allows GET/POST/OPTIONS and Content-Type/X-ScrapMart-CSRF/Authorization with credentials enabled;
 the only exposed custom response header is Retry-After. Signup does not set auth cookies
 in this phase; `credentials: include` is not required for signup. Use HTTPS in
 production. Browser tests must use a configured local origin during development.
@@ -596,3 +597,53 @@ SCRAPMART_RUN_LOCAL_POSTGRES_TESTS=0 SCRAPMART_RUN_BUYER_LOGIN_POSTGRES_TESTS=0 
 The concurrent HTTP test uses separate SQLite connections to verify HTTP outcome
 and persisted replay revocation; it does not establish PostgreSQL isolation
 correctness. No PostgreSQL or Redis integration run is implied by offline success.
+
+## Authenticated Buyer profile and logout-all (Stage 2C.4)
+
+Both endpoints require exactly one `Authorization: Bearer <access JWT>` header.
+The existing verifier checks signature, fixed algorithm, issuer, audience, token
+type, canonical identifiers, and expiry. Cookies, request bodies, and query
+parameters cannot substitute for bearer authentication or select another user.
+Every request checks live User activation, session ownership/revocation/expiry,
+and an explicit BuyerProfile. `User.role` is not proof of Buyer eligibility; a
+vendor-role identity with a BuyerProfile is allowed, as with Buyer login.
+
+`GET /api/v1/auth/me` returns 200 with exactly `email`, `full_name`, nullable
+`phone_number`, and `signup_completed_at` (an ISO 8601 UTC timestamp). The response
+contains no user/profile/session identifiers, password hashes, tokens, or other
+database fields. A single joined read checks eligibility and session state while
+projecting approved account fields; it does not load password hashes or mutate
+records. No Origin/CSRF header is required for this read-only bearer request.
+Browser CORS remains restricted to configured exact origins and now permits the
+Authorization header for both authenticated endpoints.
+
+`POST /api/v1/auth/logout-all` additionally requires the existing Origin and
+`X-ScrapMart-CSRF: 1` protections. No request body or Content-Type is required.
+Authorization and revocation occur in one transaction: User version update,
+current session lock, BuyerProfile SHARE lock, then the existing logout-all bulk
+update. Current-session and JWT expiry are rechecked after lock acquisition.
+The existing bounded serialization/deadlock retry policy is retained. This
+prevents an already-revoked credential from revoking later sessions after a
+User lock wait. All unrevoked, unexpired sessions for that Buyer, including the
+current session, are revoked; other users and refresh-token history are untouched.
+Success is an empty 204 with refresh-cookie deletion using the established scope
+and security flags. A repeated request with the revoked access token returns 401.
+
+Both endpoints use `Cache-Control: no-store`. Missing/malformed/duplicate bearer
+headers, invalid JWTs, invalid live sessions, and ineligible accounts receive the
+same generic 401 with `WWW-Authenticate: Bearer`. Authentication and infrastructure
+errors do not clear cookies; persistence/configuration failures return generic
+503 responses, and unexpected failures return safe 500 responses. Existing Redis
+limits and cookie-only refresh/logout behavior are unchanged. BuyerProfile locking
+permissions remain the previously documented deployment prerequisite; this stage
+does not provision roles or grants.
+
+Focused offline validation (external integrations disabled):
+
+```bash
+SCRAPMART_RUN_LOCAL_POSTGRES_TESTS=0 SCRAPMART_RUN_BUYER_LOGIN_POSTGRES_TESTS=0 SCRAPMART_RUN_LOCAL_REDIS_TESTS=0 PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m pytest -p no:cacheprovider -q tests/test_buyer_account_http.py tests/test_auth_sessions.py tests/test_buyer_signup.py tests/test_buyer_login_http.py tests/test_buyer_sessions_http.py
+```
+
+SQLite regression tests include controlled overlap with current-session revocation
+at the User lock boundary. They do not establish PostgreSQL isolation correctness;
+no live PostgreSQL or Redis integration execution is implied by this validation.

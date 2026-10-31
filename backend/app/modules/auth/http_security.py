@@ -39,15 +39,21 @@ def clear_refresh_cookie(response: Response) -> None:
                            secure=True, httponly=True, samesite="lax")
 
 
+def marketplace_path(path):
+    return any(path == prefix or path.startswith(prefix + '/') for prefix in
+               ('/api/v1/vendor/listings', '/api/v1/listings', '/api/v1/categories'))
+
+
 class AuthRequestMiddleware:
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or not scope["path"].startswith("/api/v1/auth/"):
+        if scope["type"] != "http" or not (scope["path"].startswith("/api/v1/auth/") or marketplace_path(scope["path"])):
             await self.app(scope, receive, send)
             return
 
+        marketplace = marketplace_path(scope["path"])
         response_started = False
         operations = {"/api/v1/auth/vendor/identity-document": "Document submission",
                       "/api/v1/auth/phone/send-code": "Phone verification", "/api/v1/auth/phone/verify-code": "Phone verification", "/api/v1/auth/vendor/onboarding": "Onboarding", "/api/v1/auth/vendor/logout-all": "Logout", "/api/v1/auth/vendor/me": "Profile request",
@@ -57,7 +63,7 @@ class AuthRequestMiddleware:
                       "/api/v1/auth/me": "Profile request", "/api/v1/auth/logout-all": "Logout"}
         review_path = scope["path"] == "/api/v1/auth/verification/cases" or scope["path"].startswith("/api/v1/auth/verification/cases/")
         submission_path = scope["path"] == "/api/v1/auth/vendor/verification/submit"
-        operation = "Verification review" if review_path or submission_path else operations.get(scope["path"], "Registration")
+        operation = "Listing request" if marketplace else "Verification review" if review_path or submission_path else operations.get(scope["path"], "Registration")
 
         async def no_store(message: Message) -> None:
             nonlocal response_started
@@ -77,9 +83,9 @@ class AuthRequestMiddleware:
                 }})
                 await response(scope, source, no_store)
 
-        if (scope["path"] in operations or review_path or submission_path) and scope["method"] in {"POST", "PATCH"}:
+        if (marketplace or scope["path"] in operations or review_path or submission_path) and scope["method"] in {"POST", "PATCH", "DELETE"}:
             # Bound uploaded bytes before parsing or copying them into services.
-            limit = 3 * 1024 * 1024 if scope["path"] == "/api/v1/auth/vendor/identity-document" else 16384
+            limit = 3 * 1024 * 1024 if scope["path"] == "/api/v1/auth/vendor/identity-document" or (marketplace and scope["path"].endswith("/photos") and scope["method"] == "POST") else 16384
             body = bytearray()
             while True:
                 message = await receive()
@@ -115,7 +121,7 @@ class AuthNoStoreMiddleware:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or not scope["path"].startswith("/api/v1/auth/"):
+        if scope["type"] != "http" or not (scope["path"].startswith("/api/v1/auth/") or marketplace_path(scope["path"])):
             await self.app(scope, receive, send)
             return
 

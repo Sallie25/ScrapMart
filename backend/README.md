@@ -1076,3 +1076,111 @@ runtime/provisioning grants only through separately authorized operations. Exist
 private storage/SMS/OTP/Redis deployment requirements still apply. No live migration,
 provider call or provisioning was performed. Offline concurrency uses separate
 SQLite connections and cannot establish live PostgreSQL isolation guarantees.
+
+## Marketplace listings MVP (Stage 3A)
+
+Vendor endpoints under `/api/v1/vendor/listings`:
+
+- POST creates a draft; GET lists own listings (`limit` 1–50, keyset `cursor`,
+  optional status). GET/PATCH `/{listing_id}` retrieve/edit an owned listing.
+- POST `/{listing_id}/publish` requires `{"public_location_consent":true}`.
+- POST `/{listing_id}/pause` and `/sold` accept an empty request or `{}`.
+- DELETE `/{listing_id}` safely archives as the existing internal `removed` state.
+- POST `/{listing_id}/photos?public_consent=true` accepts raw JPEG/PNG bytes;
+  DELETE `/{listing_id}/photos/{image_id}` removes an owned photo.
+
+Every Vendor listing operation requires an active identity/live bearer session and
+an explicitly approved Vendor with current matching approval audit and evidence,
+not User.role. Mutations use the existing transaction-bound authorization callback,
+User -> session -> Vendor -> listing -> category/resource lock order, ownership
+checks, rollback/retry protections, and fresh JWT/session time after resource waits.
+Origin/CSRF protects mutations. Unknown/mass-assigned fields are rejected; errors
+are sanitized and all marketplace responses use no-store. Pending/rejected/
+suspended or evidence-invalid Vendors cannot manage listings. Buyer login/profile,
+Vendor verification and shared session behavior are preserved.
+
+Inputs reuse the existing model vocabulary: title, category_id, description,
+condition (`good_condition`, `used`, `faulty`, `damaged`, `for_parts`), quantity and
+unit (`pieces`, `kilograms`, `tonnes`, `bundles`), price_type (`total`, `per_unit`),
+is_negotiable, location_summary, lga, area, latitude/longitude, location_visibility,
+and directions_allowed. Category must exist and be active. Drafts may be partial
+but require a nonblank title. Text is NFC-normalized and bounded; single-line
+fields collapse whitespace. Description permits ordinary line breaks. Prices are
+NGN decimal strings or integers, nonnegative and below 1e12, at most two decimal
+places; JSON floats, exponent strings and silent monetary rounding are rejected.
+Quantity is a positive decimal string/integer below 1e11 with at most three places;
+pieces must be whole. Responses use exact price/quantity strings. Currency, owner,
+status, timestamps, image references and verification fields are not writable.
+
+Publication preserves all existing database requirements: active category,
+description, price, quantity/unit, condition, public location summary, paired
+coordinates, non-hidden visibility, publication timestamp and at least one stored
+photo. Approximate coordinates are rounded to two decimal degrees before storage;
+precise coordinates/directions require the explicit public_site visibility and
+publication consent. Active location edits require renewed public_location_consent.
+The API never copies private onboarding shop/address data into public listing
+locations. Vendors must enter only location information they intend to publish.
+
+Lifecycle is draft/inactive -> active (publish), active -> inactive (pause),
+active/inactive -> sold, and any nonremoved state -> removed (archive). Sold and
+removed records cannot be edited/reactivated. Archiving is idempotent and retains
+the listing and images for future references; there is no physical listing DELETE.
+Photo changes require draft/inactive status: pause first. Existing deferred image
+triggers and constraints remain unchanged. Pause/sold/archive do not depend on
+public-photo delivery availability; they still require live Vendor evidence.
+
+Public GET `/api/v1/listings` supports q (literal case-insensitive title/description
+search), category_id, location (public summary/LGA/area), condition, min_price,
+max_price, verified_only, sort=recent, limit and cursor. GET `/api/v1/listings/{id}`
+returns active eligible details only; hidden/ineligible records return generic 404.
+GET `/api/v1/categories` lists active categories with bounded UUID pagination
+(`after`, `limit` up to 100). Category creation/provisioning is not public.
+
+All public listings must belong to currently active, approved Vendors whose real
+audit/evidence still match, regardless of verified_only=false. Public results include
+business name, a true verified badge after checks, and a shop_location display
+**derived from the listing's consented public location summary**, never private
+Vendor.shop_location/shop_address. No owner email/phone, government-ID key/content,
+OTP, audit or internal evidence appears. Photo storage keys are not returned.
+Missing photos hide a listing; unavailable required infrastructure fails closed.
+
+Public listing pages return at most 20 records, ordered by published_at DESC and
+UUID DESC, with a keyset next_cursor. At most 25 SQL candidates (plus one lookahead)
+and 25 unique Vendor evidence checks are scanned per request; an underfilled or
+empty page may have a continuation cursor when invalid candidates were skipped.
+Per-request evidence reuse avoids duplicate checks for one Vendor, without a cache
+across requests. Queries have bounded results and public PostgreSQL browse queries
+use a five-second statement timeout. These are read snapshots: status changes after
+an in-flight read's authorization point may race its response, but subsequent reads
+check live state. Mutation authorization remains locked through commit.
+
+There is no configured durable public-photo provider. ListingPhotoStorage is a
+separate put/exists/public_url/delete contract whose default factory fails 503.
+An approved deployment adapter must provide immutable durable public product-photo
+objects and HTTPS URLs in the listings/ namespace, in a separate location/bucket
+from government IDs. There is no public local filesystem/static fallback, client
+URL/key input or new paid provider. Photos are expressly public upon upload (even
+for drafts), requiring public_consent=true. They are capped at 3 MiB, decoded as
+JPEG/PNG with the existing bounded Pillow raster validator (10M pixels/8192 per
+axis), stripped/re-encoded to JPEG, and assigned opaque server keys. At most five
+photos are stored, with server-selected positions. Format/size validation uses
+actual bytes, not MIME or filename alone.
+
+External photo writes/deletes occur outside retryable database transactions.
+Admission/ownership/status are rechecked after upload before image metadata commits.
+Known rollback cleans up the new object; ambiguous outcomes preserve potentially
+committed references, and failed reconciliation/deletion can leave unadvertised
+public orphans requiring provider-side retention cleanup. Explicit photo consent
+covers this public storage behavior. No URL is returned before metadata commit.
+Deletion checks for other metadata references before removing a shared legacy
+object. Product-photo URLs may remain in public/CDN caches after archival/removal;
+no private-document URL is ever produced or placed in product-photo storage.
+
+No tables or migrations are added. Existing Listing, ListingImage, Category and
+marketplace migration a7c92e4b610f are reused. Durable public-photo storage and
+active category data must be configured before publication; existing private
+verification storage/reviewer/SMS/OTP deployment requirements remain. Offline tests
+use real evidence review and separate product-photo doubles; they cannot establish
+PostgreSQL trigger/isolation or real provider durability guarantees. No live
+migration, provider provisioning, order/messaging/payment integration or deployment
+has been performed.

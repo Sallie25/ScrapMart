@@ -70,7 +70,7 @@ def require_approved_evidence(db, user_id, vendor_id, settings):
     approval = db.execute(select(Audit.evidence_revision).join(
         Vendor, Vendor.approval_review_id == Audit.id,
     ).where(Vendor.id == vendor_id, Audit.vendor_id == vendor_id,
-            Audit.action == 'approve', Audit.new_status == 'approved')).scalar_one_or_none()
+            Audit.action == 'approve', Audit.new_status == 'approved', Vendor.verification_status == 'approved')).scalar_one_or_none()
     if approval is None:
         raise VendorPermissionError()
     storage = get_private_document_storage(settings or get_settings())

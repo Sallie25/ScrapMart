@@ -1,3 +1,4 @@
+from app.api.v1.messaging import router as messaging_router
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -27,6 +28,7 @@ def create_app() -> FastAPI:
         version=settings.app_version,
     )
 
+    app.include_router(messaging_router, prefix="/api/v1")
     app.include_router(orders_router, prefix="/api/v1")
     app.include_router(marketplace_router, prefix="/api/v1")
     app.include_router(verification_review_router, prefix="/api/v1")

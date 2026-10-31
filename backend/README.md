@@ -1289,3 +1289,51 @@ behavior across separate connections; offline PostgreSQL SQL checks do not estab
 live PostgreSQL isolation or provider readiness. Existing private/public storage,
 SMS/OTP/Redis/reviewer deployment prerequisites remain. No payment, order messages,
 front-end, production operation, commit, push or deployment was performed here.
+
+## Buyer–Vendor messaging MVP (Stage 3C)
+
+No existing messaging tables were present. Migration `b17e9a3456cd` follows
+`a06d8f2345bc` and adds `conversations` and `messages`. It has not been applied
+against a live database. Apply it through separately authorized operations before
+running the messaging APIs. Conversation participants are immutable, and listing,
+profile and message foreign keys restrict physical deletion, retaining history.
+
+Authenticated HTTP endpoints (under `/api/v1`):
+
+- POST `/conversations`: `{ "listing_id": "UUID" }`; start or retrieve the Buyer's
+  conversation with the listing's actual Vendor. Only an explicit Buyer profile
+  can initiate. New conversations require an active listing, active owner, and
+  current approved Vendor evidence. Self-conversations are rejected.
+- GET `/conversations`: participant conversations, including per-conversation
+  `unread_count`; GET `/conversations/unread`: total incoming unread count.
+- GET `/conversations/{id}/messages`: message history.
+- POST `/conversations/{id}/messages`: `{ "content": "text", "request_id": "UUID" }`.
+  Optional request_id deduplicates retries per conversation and sender. A retry
+  with different content returns 409. Without it, each successful POST is new.
+- POST `/conversations/{id}/read`: `{ "message_id": "UUID" }`; marks only that
+  incoming message read, idempotently. Reading history alone does not mark read.
+
+Lists use newest-first `(created_at, id)` keyset ordering, default limit 20,
+maximum 50 conversations or 100 messages, and an opaque `next_cursor`. Clients
+poll and render content as plain text. Text is retained exactly, with 1–4000
+Unicode characters, nonblank content, no unpaired surrogates, NUL or control
+characters other than tabs and line endings. Unknown input fields are rejected.
+No client sender, recipient, Buyer or Vendor IDs are accepted.
+
+Every request checks a live active User/session and explicit participant profiles,
+never User.role. Existing participants can read, reply, and acknowledge incoming
+messages after listing inactivity, sale or archival, Vendor suspension or evidence
+expiry. New initiation remains subject to current authorization. Existing reuse
+requires no evidence-storage lookup. Cross-participant requests return generic 404;
+invalid fields 422, initiation/idempotency conflicts 409, Vendor ineligibility 403,
+authentication failures 401, and unavailable infrastructure 503. Shared Origin/CSRF,
+bounded JSON bodies and no-store handling apply. Responses explicitly project only
+conversation identifiers, timestamps, counts and message text/sender side; they do
+not disclose contact details or verification data.
+
+Shared User/session locks, conversation locks, database uniqueness and transaction
+rollback protect creation, retries and read receipts. Tests use SQLite and offline
+PostgreSQL DDL; they do not establish live PostgreSQL locking behavior. Operational
+requirements are the existing database, authentication and private evidence-storage
+configuration for new initiation. No messaging provider, WebSockets, Redis Pub/Sub,
+voice calling, push service, frontend or payment integration is required.

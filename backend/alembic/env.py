@@ -1,3 +1,4 @@
+from app.modules.messaging import models as messaging_models  # noqa: F401
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool

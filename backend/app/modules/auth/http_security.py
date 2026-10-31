@@ -41,7 +41,7 @@ def clear_refresh_cookie(response: Response) -> None:
 
 def marketplace_path(path):
     return any(path == prefix or path.startswith(prefix + '/') for prefix in
-               ('/api/v1/vendor/listings', '/api/v1/listings', '/api/v1/categories', '/api/v1/buyer/orders', '/api/v1/vendor/orders'))
+               ('/api/v1/conversations', '/api/v1/vendor/listings', '/api/v1/listings', '/api/v1/categories', '/api/v1/buyer/orders', '/api/v1/vendor/orders'))
 
 
 class AuthRequestMiddleware:

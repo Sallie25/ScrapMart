@@ -16,6 +16,7 @@ from app.main import create_app
 from app.modules.auth.email_identity_models import EmailIdentityPolicyState as Policy, EmailIdentityReservation as Reservation, POLICY_STATE_ID
 from app.modules.auth.login_rate_limit import BuyerLoginRateLimiter, get_login_rate_limiter
 from app.modules.auth.login_policy import InvalidBuyerCredentials
+from app.modules.auth.phone_models import PhoneVerification
 from app.modules.auth.models import User
 from app.modules.auth.security import digest_refresh_token, verify_access_token
 from app.modules.auth.session_models import AuthSession, RefreshToken
@@ -37,7 +38,7 @@ def http_store(monkeypatch, tmp_path, encoded_password):
     @sa.event.listens_for(engine, "connect")
     def setup(connection, _):
         connection.execute("PRAGMA foreign_keys=ON")
-    User.metadata.create_all(engine, tables=foundation.TABLES + [Reservation.__table__])
+    User.metadata.create_all(engine, tables=foundation.TABLES + [Reservation.__table__, PhoneVerification.__table__])
     policy = Policy.__table__.to_metadata(sa.MetaData())
     for constraint in policy.constraints:
         if constraint.name == "ck_eips_singleton":

@@ -777,3 +777,302 @@ for Vendor SHARE locks; no grants or migrations are introduced here. Read snapsh
 do not claim mutation race safety. Offline tests inspect the PostgreSQL lock SQL
 and transaction behavior; they do not prove PostgreSQL concurrency semantics.
 No listing/order endpoints or verification collection are added in this stage.
+
+## Vendor session lifecycle (Stage 2D.6)
+
+Vendor and dual-profile logins use the existing `POST /api/v1/auth/refresh` and
+`POST /api/v1/auth/logout`. No alternate endpoints, cookies or token tables are
+needed. Rotation keeps the same session expiry. Reuse of a consumed refresh token
+revokes the session, invalidating its access tokens in both account experiences.
+Logout revokes only the cookie's session and retains refresh history. Expired or
+inactive identities may still use cookie logout, as before. Refresh checks live
+User activation and session expiry/revocation; it grants no profile or selling
+permission. Verification restrictions are enforced separately by live Vendor
+authorization, even after refresh or account selection.
+
+`POST /api/v1/auth/vendor/logout-all` requires the existing bearer access JWT,
+allowed Origin and `X-ScrapMart-CSRF: 1`. It needs no body or Content-Type and
+accepts pending, approved, rejected and suspended Vendor profiles. In one shared
+transaction it locks User (version update), current session, then Vendor SHARE;
+rechecks activation, live session and JWT expiry after all locks; and revokes all
+unrevoked, unexpired sessions belonging to that User across both experiences.
+It clears the shared refresh cookie and returns empty 204 only after commit.
+Other users and refresh-token history are unaffected. A revoked caller cannot
+repeat the operation to revoke later sessions. Valid sessions without a Vendor
+receive 403; invalid authentication receives generic 401. Authentication,
+permission and infrastructure failures do not clear the cookie; persistence
+failures return safe 503 responses so clients can retry. The endpoint has the
+existing 16 KiB request bound and no-store behavior.
+
+Buyer /me and logout-all retain their explicit BuyerProfile checks and user-wide
+revocation semantics. Vendor-only identities cannot use those Buyer operations;
+Buyer-only identities cannot use Vendor profile/logout-all operations. Dual-profile
+identities may use either experience without acquiring verification approval.
+Suspension takes effect on the next selling authorization check with the same JWT.
+
+Offline tests exercise Vendor/dual-profile rotation, logout, cross-account
+revocation, replay, live status changes, safe failures and post-lock expiry checks.
+A concurrent Vendor refresh test uses separate SQLite connections and verifies
+one successful rotation, one replay rejection, and committed session revocation.
+SQLite results do not establish PostgreSQL isolation guarantees. Live PostgreSQL
+and Redis integrations remain separate; no migrations or grants are applied here.
+
+## Vendor shop information and verification foundation (Stage 2D.7A)
+
+`GET /api/v1/auth/vendor/onboarding` returns only `business_name`, nullable
+`shop_location`, nullable `shop_address`, and current `verification_status` for
+the authenticated Vendor. The `/auth/vendor` convention keeps onboarding inside
+the existing bearer authentication, safe-error and no-store boundary. Shop address
+and location are private onboarding information, not consent to publish a location.
+Existing Vendor /me and capability responses do not include them.
+
+`PATCH /api/v1/auth/vendor/onboarding` accepts a nonempty partial object containing
+only business_name (up to 200 characters), shop_location (up to 200), and
+shop_address (up to 500). Supplied values must be nonblank strings; null cannot
+clear fields. Values are normalized to NFC and collapsed single spaces. Invalid
+UTF-8, control/format characters, empty patches and unknown fields are rejected
+with sanitized 422 errors. Business name updates reuse the existing Vendor column.
+The mutation requires JSON, the existing exact Origin and CSRF header, live bearer
+credentials, and the 16 KiB request bound. CORS now permits PATCH for allowed
+origins. Every response, including errors, is no-store.
+
+Pending and rejected Vendors may edit drafts; their status is preserved and an
+edit does not submit/resubmit verification. Approved and suspended Vendors may
+read but receive 403 on every edit, including name-only edits. Approved information
+cannot change silently while retaining approval: audited re-review is not yet
+implemented. Suspension remains operator-controlled. Mutation lock order is User
+version update, current session UPDATE, Vendor UPDATE; session/JWT expiry is
+rechecked after all locks. Status checks and changes share the same transaction,
+so concurrent approval/suspension updates cannot bypass the edit policy. The
+shared retry/rollback and activation/revocation protections are retained.
+
+Migration `d73a5c9012ef` follows `c42f7d18a903` and adds only nullable
+`vendors.shop_location` and `vendors.shop_address`. Existing rows remain valid and
+existing statuses are unchanged. There are no new tables, duplicate names,
+verification booleans or submission timestamps. Apply the migration through a
+separately authorized deployment before using code that queries the new columns;
+no shared/production migration was run. Downgrade removes shop information.
+
+`VendorOnboardingService.get_verification_readiness` checks shop completeness and
+reports the outstanding secure-government-ID-document and verified-phone-ownership
+requirements. Neither evidence system exists yet, so can_submit is always false.
+`require_verification_submission` authenticates and fails closed; no submission
+endpoint, fake evidence, upload, SMS integration or approval path exists here.
+Future submission must atomically recheck persisted trusted evidence and record a
+submission revision; completion additionally requires authorized reviewer approval.
+Government ID type/document collection, phone proof, reviewer permissions/audit and
+re-review transitions belong to subsequent stages. Existing approved-only selling
+checks remain authoritative; shop completion never grants selling access.
+
+Focused tests cover private projections, profile isolation, edit/status policy,
+normalization, injection, locks/expiry, readiness and rollback. Migration validation
+uses generated PostgreSQL SQL and a disposable SQLite table with historical rows;
+this does not establish live PostgreSQL concurrency or deployment correctness.
+
+## Private identity documents and shared phone OTP (Stage 2D.7B)
+
+`POST /api/v1/auth/vendor/identity-document?identification_type=...` requires a
+live Vendor bearer session plus the existing Origin/CSRF headers. Send a raw
+`image/jpeg` or `image/png` body, not multipart or a storage URL. Supported API ID
+type codes are `national_id`, `passport`, `drivers_license`, and `voter_id`; final
+product display labels can map to these codes. No ID number is requested. The
+body is limited to 3 MiB before parsing/copying; decoded images are limited to
+10 million pixels and 8192 pixels per dimension. Pillow verifies and decodes the
+actual content, rejects animated/unsupported/corrupt images, and re-encodes clean
+JPEG pixels without EXIF or appended payloads. PDF/SVG/GIF are not supported.
+
+A random 256-bit opaque storage key is generated server-side. Only ID type, private
+key, submission time and `submitted` status are persisted on Vendor. Uploading is
+not identity approval. Only pending/rejected Vendors may upload or replace a
+document, with status preserved. Authorization and state are rechecked after
+storage under User -> session -> Vendor locks before metadata commit. External
+storage writes are outside transaction retries. Known rollback removes the new
+object; ambiguous commit outcomes reconcile the current reference before deletion.
+If reconciliation/deletion fails, private orphans can remain for restricted
+operator retention cleanup. They are never public and no retrieval route or URL
+is created. Obsolete objects are deleted best-effort after replacement commits.
+
+Storage is disabled by default. The opt-in `durable_volume` adapter requires all
+of PRIVATE_DOCUMENT_STORAGE_BACKEND=durable_volume,
+PRIVATE_DOCUMENT_STORAGE_DURABLE=true, and an absolute PRIVATE_DOCUMENT_STORAGE_ROOT.
+The root must already exist, be owned by the process, have owner-only permissions,
+and be outside the source tree and /tmp. Objects use 0600 permissions and fsync.
+The operator must supply an encrypted durable volume, exclude it from all HTTP,
+static/media and proxy routes, and configure backups/retention/reconciliation.
+This is not a serverless temporary-filesystem fallback. Serverless deployments
+without such a mount need an approved private-object-storage adapter implementing
+PrivateDocumentStorage; missing configuration returns safe 503 responses. No
+public bucket, document bytes, storage key, or signed URL is returned by the API.
+
+`POST /api/v1/auth/phone/send-code` accepts `{}` and uses the authenticated User's
+stored phone number, strictly E.164 (`+` and 8–15 digits). It never accepts a
+client-selected target. A missing/invalid current phone receives the same generic
+202 acknowledgment without delivery. `POST /api/v1/auth/phone/verify-code` accepts
+`{"code":"<six digits>"}` and returns empty 204 only on successful one-time proof;
+incorrect/expired/consumed codes return generic 400. Both endpoints require live
+bearer authentication, JSON, Origin/CSRF, no-store and the existing 16 KiB bound.
+They serve Buyer, Vendor and dual-profile identities using the same User evidence.
+
+Codes use secrets.randbelow, a five-minute TTL, a fresh challenge nonce, and a
+separate PHONE_OTP_SECRET (canonical base64url encoding of 32 random bytes). Only
+HMAC-SHA256 digests bound to User, nonce, current phone and code are stored. The
+secret is never stored in the database. Codes are never returned/logged. Each
+challenge allows five guesses; failed guesses commit their counters. Consumption
+and sending serialize through the existing User lock. Resends invalidate the old
+challenge, require 60 seconds, and allow at most six sends per User/hour even
+across phone changes. Existing atomic Redis/HMAC counters additionally limit send
+requests to 10/IP/hour and verify requests to 60/IP/hour, failing closed on Redis
+or secret configuration failure. Changing the phone invalidates both proof and
+challenge via a migration-installed database trigger, including change-away-and-
+back. Storing a phone number alone is never proof. Retrying verification cannot
+reuse a consumed code. A fresh send requires fresh proof.
+
+There is no SMS provider integration or demo code. get_sms_delivery fails closed
+until an approved SmsDelivery adapter is supplied. That adapter must keep code/
+phone data out of logs and honor challenge UUID idempotency keys. Delivery happens
+after challenge commit, outside retryable transactions. Failure invalidates that
+challenge best-effort and never marks a phone verified; unsuccessful/uncertain
+pending challenges expire and are not ownership evidence. No paid provider is
+selected. Offline tests inject capturing SMS and in-memory private storage only
+within their isolated fixtures; there is no production test-mode switch.
+
+Migration `e84b6d0123fa` follows and preserves `d73a5c9012ef`. It adds four nullable
+Vendor document metadata columns, an all-or-none document constraint, one shared
+phone_verifications row per User, and phone-change invalidation triggers. It
+backfills no phone proof, document, challenge or approval. Runtime permissions must
+allow the User phone-change trigger to invalidate the phone row; direct table
+writes remain trusted backend operations. Metadata.create_all alone does not
+install the trigger. Downgrade deletes verification metadata/challenges. No live
+migration has been run.
+
+Readiness now requires complete shop fields, a submitted document whose private
+object exists, and verified ownership of the current phone. Pending/rejected
+accounts with all evidence may pass the readiness check; approved/suspended
+accounts cannot submit a new review through it. Readiness is a snapshot, never a
+mutation grant. Future reviewer submission must atomically snapshot/recheck the
+evidence under the established locks. Authorized review alone may approve a
+Vendor. Existing approved-only selling guards and private profile projections
+remain unchanged; document upload or phone proof grants no selling permission.
+
+The deployment blockers are durable private storage, an approved SMS adapter,
+PHONE_OTP_SECRET/Redis configuration, and separately authorized migrations. Tests
+exercise provider failures, rollback, historical rows, triggers, content decoding,
+code races, limits, status restrictions, and readiness using isolated SQLite and
+offline PostgreSQL SQL. They do not prove live PostgreSQL isolation or provider
+availability. pyproject.toml/uv.lock include Pillow for real image decoding; the
+historical desktop requirements.txt is not the application's dependency source.
+
+## Restricted verification review and approval (Stage 2D.8)
+
+A Vendor explicitly submits complete evidence using
+`POST /api/v1/auth/vendor/verification/submit` with `{}`. The live User/session,
+shop fields, private submitted document and current phone proof are checked under
+User -> session -> Vendor locks. Submission stores an evidence digest and timestamp,
+creates an audit event, and leaves/returns the case to pending. Identical pending
+submissions are idempotent. Uploading a document alone is not this review submission.
+
+Restricted reviewer endpoints are:
+
+- `GET /api/v1/auth/verification/cases?status=pending&limit=25&after=<vendor-uuid>`
+- `GET /api/v1/auth/verification/cases/{vendor_id}`
+- `GET /api/v1/auth/verification/cases/{vendor_id}/document`
+- `GET /api/v1/auth/verification/cases/{vendor_id}/history?after=0&limit=100`
+- `POST /api/v1/auth/verification/cases/{vendor_id}/approve`
+- `POST /api/v1/auth/verification/cases/{vendor_id}/reject`
+- `POST /api/v1/auth/verification/cases/{vendor_id}/suspend`
+- `POST /api/v1/auth/verification/cases/{vendor_id}/reopen`
+
+Every decision requires `expected_version`, `expected_evidence_revision` (from
+case detail), and a nonblank reason of at most 500 characters. Unknown fields,
+client reviewer IDs/roles/status flags, and control characters are rejected.
+Mutations require JSON, exact Origin/CSRF headers and the existing 16 KiB bound.
+All reads require bearer authentication; all responses are no-store. Invalid
+credentials receive 401, insufficient permission/self-review 403, unavailable
+cases 404, stale evidence/version or invalid transitions 409, sanitized validation
+422, and infrastructure failure 503. Lists are bounded with UUID cursors, history
+uses case-version cursors, and neither list nor case metadata returns storage keys. Case detail exposes a document_available
+flag; unavailable/corrupt evidence cannot be approved. Metadata remains available
+for suspension/rejection during storage outages, while document downloads fail 503.
+History includes owner submission events with no reviewer ID, and explicit human
+decisions with the authenticated reviewer ID and reason.
+
+Reviewer authority comes exclusively from an unrevoked verification_reviewers
+row plus a live, active User/session. User.role=admin, BuyerProfile, Vendor, public
+signup or request fields grant no reviewer permission. Grants cover all Vendor
+cases for this MVP, except the reviewer's own Vendor: own cases are excluded from
+lists and denied for detail, document, history and decisions. Case-specific document
+access resolves the current private key server-side from the authorized Vendor;
+there is no arbitrary-key retrieval, signed/public URL, or public media route.
+Documents are bounded, validated JPEG downloads with attachment/nosniff/CSP headers;
+storage unavailability fails closed. Storage adapters must implement read as well
+as put/exists/delete and keep opaque keys immutable. Evidence reads may be retried;
+no external write/delivery occurs inside review transaction retries.
+
+There is no default reviewer, reviewer signup, or public permission API. Provision
+an existing authenticated identity with the trusted operator utility:
+`python -m app.modules.vendors.reviewer_provisioning --user-id <existing-user-uuid> --reference <operator-ticket>`.
+Use `--revoke` to revoke the permission. Run it only with a separately authorized
+provisioning database role via the normal database configuration; never use public
+request inputs or publish its credentials. References must identify an operator/
+ticket, not contain identity documents or credentials. All grant/revoke writers
+must take the reviewer User version lock through this utility. Runtime must have
+SELECT only on verification_reviewers (no INSERT/UPDATE/DELETE), SELECT/INSERT
+only on verification_review_audit, and the established User/session/Vendor lock
+privileges. The separate provisioning role needs permission-table writes and the
+User lock privilege. Database ownership/superuser credentials must not serve HTTP.
+No roles, grants, identities, or permissions are provisioned automatically here.
+A reviewer can authenticate using their existing Buyer/Vendor profile session;
+review permission is separate from those experiences and never enables self-review.
+
+Valid transitions are pending -> approved/rejected, approved -> suspended, and
+suspended -> pending (reopen). Only a complete explicit owner submission returns
+rejected -> pending. Reopening clears the submission snapshot; owner resubmission
+is required before another approval. Approval requires current complete evidence
+matching the submitted revision, not just an uploaded file or client status.
+Rejection can record a reason against currently viewed incomplete/changed evidence.
+No approved information is silently editable through owner onboarding routes.
+
+Decisions lock both reviewer and target User rows in UUID order, then the reviewer
+session, then Vendor; permission reads are serialized with trusted provisioning
+through the reviewer User lock. Current activation, revocation and JWT expiry are
+rechecked after lock waits and private evidence checks. Case versions and current
+evidence digests reject stale/conflicting decisions. User phone/evidence writers
+use the established User-first locking order. Each status change and its audit
+record commit together or roll back together. Audit records contain Vendor, actor,
+reviewer where applicable, action, evidence revision, version, previous/new status,
+database decision time and reason. Evidence revisions also bind a canonical document
+content checksum; database triggers reject audit UPDATE/DELETE.
+
+Selling authorization now requires a real approval audit associated with that
+Vendor AND an exact match to current verified evidence, plus current complete
+shop fields, phone proof and a private document whose decoded content checksum
+still matches the approved object. The approval pointer
+is a logical audit reference checked by vendor ID/action/status, avoiding a cyclic
+foreign key. Evidence digests bind full name, shop data, immutable private document
+key/type/submission time, current phone/proof/time/challenge nonce and User activation. Missing
+approval history, phone changes/re-verification, material evidence changes, missing
+objects or storage outages fail closed without executing a protected mutation.
+Historical approved flags are not backfilled as trusted approval. Operators must
+suspend/reopen those cases and obtain explicit submission/review before selling.
+Reviewer revocation does not retroactively erase legitimate historical decisions.
+Suspension immediately blocks subsequent selling checks while leaving Buyer access
+intact unless the shared User is deactivated. Status may remain approved when
+proof becomes invalid, but status alone can never authorize selling. Corrupt or
+replaced object content also fails the checksum check. Re-encoding/library changes
+that change canonical checksums require re-review rather than granting stale access.
+
+Read selling checks are snapshots. Mutation callbacks share the User/session/
+Vendor locks and recheck live evidence before executing, including a fresh expiry
+check after storage access. Private-object existence is checked per operation;
+external operator/storage deletion cannot be transactionally locked by PostgreSQL,
+so storage keys must remain immutable and metadata changes coordinated through
+the service. No guarantee is made about an already-authorized in-flight operation
+after an external object deletion. Subsequent operations fail closed.
+
+Migration f95c7e1234ab follows and preserves e84b6d0123fa and d73a5c9012ef. It adds
+reviewer grants, immutable review audit, submission revision/time, case version,
+and approval-audit reference. It seeds no permissions or approvals. Apply it and
+runtime/provisioning grants only through separately authorized operations. Existing
+private storage/SMS/OTP/Redis deployment requirements still apply. No live migration,
+provider call or provisioning was performed. Offline concurrency uses separate
+SQLite connections and cannot establish live PostgreSQL isolation guarantees.

@@ -49,12 +49,15 @@ class AuthRequestMiddleware:
             return
 
         response_started = False
-        operations = {"/api/v1/auth/vendor/me": "Profile request",
+        operations = {"/api/v1/auth/vendor/identity-document": "Document submission",
+                      "/api/v1/auth/phone/send-code": "Phone verification", "/api/v1/auth/phone/verify-code": "Phone verification", "/api/v1/auth/vendor/onboarding": "Onboarding", "/api/v1/auth/vendor/logout-all": "Logout", "/api/v1/auth/vendor/me": "Profile request",
                       "/api/v1/auth/capabilities": "Account request", "/api/v1/auth/vendor/login": "Login", "/api/v1/auth/vendor/signup": "Registration",
                       "/api/v1/auth/vendor/enroll": "Enrollment", "/api/v1/auth/buyer/signup": "Registration", "/api/v1/auth/buyer/login": "Login",
                       "/api/v1/auth/refresh": "Refresh", "/api/v1/auth/logout": "Logout",
                       "/api/v1/auth/me": "Profile request", "/api/v1/auth/logout-all": "Logout"}
-        operation = operations.get(scope["path"], "Registration")
+        review_path = scope["path"] == "/api/v1/auth/verification/cases" or scope["path"].startswith("/api/v1/auth/verification/cases/")
+        submission_path = scope["path"] == "/api/v1/auth/vendor/verification/submit"
+        operation = "Verification review" if review_path or submission_path else operations.get(scope["path"], "Registration")
 
         async def no_store(message: Message) -> None:
             nonlocal response_started
@@ -74,19 +77,22 @@ class AuthRequestMiddleware:
                 }})
                 await response(scope, source, no_store)
 
-        if scope["path"] in operations and scope["method"] == "POST":
+        if (scope["path"] in operations or review_path or submission_path) and scope["method"] in {"POST", "PATCH"}:
+            # Bound uploaded bytes before parsing or copying them into services.
+            limit = 3 * 1024 * 1024 if scope["path"] == "/api/v1/auth/vendor/identity-document" else 16384
             body = bytearray()
             while True:
                 message = await receive()
                 if message["type"] == "http.disconnect":
                     return
-                body.extend(message.get("body", b""))
-                if len(body) > 16384:
+                chunk = message.get("body", b"")
+                if len(body) + len(chunk) > limit:
                     response = JSONResponse(status_code=413, content={"detail": {
                         "code": "request_too_large", "message": f"{operation} request is too large", "fields": [],
                     }})
                     await response(scope, receive, no_store)
                     return
+                body.extend(chunk)
                 if not message.get("more_body", False):
                     break
             delivered = False

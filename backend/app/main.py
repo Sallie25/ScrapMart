@@ -5,6 +5,9 @@ from app.api.v1.buyer_signup import router as buyer_signup_router
 from app.api.v1.buyer_login import router as buyer_login_router
 from app.api.v1.buyer_sessions import router as buyer_sessions_router
 from app.api.v1.buyer_account import router as buyer_account_router
+from app.api.v1.verification_review import router as verification_review_router
+from app.api.v1.verification import router as verification_router
+from app.api.v1.vendor_onboarding import router as vendor_onboarding_router
 from app.api.v1.vendor_account import router as vendor_account_router
 from app.api.v1.vendor_login import router as vendor_login_router
 from app.api.v1.vendor_registration import router as vendor_registration_router
@@ -22,6 +25,9 @@ def create_app() -> FastAPI:
         version=settings.app_version,
     )
 
+    app.include_router(verification_review_router, prefix="/api/v1")
+    app.include_router(verification_router, prefix="/api/v1")
+    app.include_router(vendor_onboarding_router, prefix="/api/v1")
     app.include_router(vendor_account_router, prefix="/api/v1")
     app.include_router(vendor_login_router, prefix="/api/v1")
     app.include_router(vendor_registration_router, prefix="/api/v1")
@@ -35,7 +41,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.auth_allowed_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
         allow_headers=["Content-Type", "X-ScrapMart-CSRF", "Authorization"],
         expose_headers=["Retry-After"],
     )

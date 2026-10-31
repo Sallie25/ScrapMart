@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     redis_url: SecretStr = SecretStr("redis://redis:6379/0")
     signup_rate_limit_secret: SecretStr | None = None
     login_rate_limit_secret: SecretStr | None = None
+    phone_otp_secret: SecretStr | None = None
+    private_document_storage_backend: str = "disabled"
+    private_document_storage_root: str | None = None
+    private_document_storage_durable: bool = False
     auth_allowed_origins: list[str] = []
     auth_trusted_proxy_cidrs: list[str] = []
 

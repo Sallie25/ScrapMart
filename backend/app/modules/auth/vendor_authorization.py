@@ -118,6 +118,8 @@ class VendorAuthorizationService(SessionService):
         def operation(db):
             row = self._snapshot(db, claims)
             self._require_profile(row.vendor_id, row.verification_status, selling=True)
+            from app.modules.vendors.evidence import require_approved_evidence
+            require_approved_evidence(db, claims.user_id, row.vendor_id, self._settings)
             return VendorIdentity(claims.user_id, row.vendor_id)
         return self._transaction(operation)
 
@@ -154,5 +156,37 @@ class VendorAuthorizationService(SessionService):
             self._require_profile(None if vendor is None else vendor.id,
                                   None if vendor is None else vendor.verification_status,
                                   selling=True)
+            from app.modules.vendors.evidence import require_approved_evidence
+            require_approved_evidence(db, claims.user_id, vendor.id, self._settings)
+            # Storage checks may take time: sample expiry again before writes.
+            now = self._now(db)
+            self._active_session(db, session, now)
+            if claims.expires_at <= now:
+                raise SessionAuthenticationError()
             return operation(db, VendorIdentity(claims.user_id, vendor.id))
         return self._transaction(authorized)
+
+    def revoke_all_vendor_sessions(self, claims: AccessTokenClaims) -> None:
+        """Authorize and revoke in one transaction, across both experiences.
+
+        User version update -> current session UPDATE -> Vendor SHARE -> bulk
+        revocation. Recheck session/JWT expiry after every admission lock. All
+        recognized statuses may log out; approval is deliberately not required.
+        """
+        self._claims(claims)
+
+        def operation(db):
+            self._active_user(self._lock_user(db, claims.user_id))
+            session = self._lock_session(db, claims.user_id, claims.session_id)
+            vendor = db.execute(select(Vendor.id, Vendor.verification_status).where(
+                Vendor.user_id == claims.user_id,
+            ).with_for_update(read=True)).one_or_none()
+            now = self._now(db)
+            self._active_session(db, session, now)
+            if claims.expires_at <= now:
+                raise SessionAuthenticationError()
+            self._require_profile(None if vendor is None else vendor.id,
+                                  None if vendor is None else vendor.verification_status)
+            self._revoke_all_session_records(db, claims.user_id, now)
+
+        self._transaction(operation)

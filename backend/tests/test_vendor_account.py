@@ -117,12 +117,14 @@ def test_authentication_rejections(store, path, state):
 
 
 @pytest.mark.parametrize('status', ['pending','approved','rejected','suspended'])
-def test_approved_only_read_and_mutation_authorization(store, status):
+def test_approved_only_read_and_mutation_authorization(store, status, monkeypatch):
     _, claims = issue(store)
     with Session(store.engine) as db, db.begin():
         db.execute(sa.update(Vendor).where(Vendor.user_id==claims.user_id).values(verification_status=status))
     callback = Mock(return_value='done')
     if status == 'approved':
+        from tests.review_support import prepare_case
+        prepare_case(store,claims,monkeypatch,approve=True)
         identity = service(store).require_approved_vendor(claims)
         assert identity.user_id == claims.user_id
         assert service(store).run_approved_vendor_operation(claims,callback) == 'done'
@@ -133,8 +135,10 @@ def test_approved_only_read_and_mutation_authorization(store, status):
         callback.assert_not_called()
 
 
-def test_suspension_effective_with_same_token_and_no_cached_grant(store):
+def test_suspension_effective_with_same_token_and_no_cached_grant(store,monkeypatch):
     token, claims = issue(store)
+    from tests.review_support import prepare_case
+    prepare_case(store,claims,monkeypatch,approve=True)
     for status in ('approved','suspended','rejected','pending'):
         with Session(store.engine) as db, db.begin():
             db.execute(sa.update(Vendor).where(Vendor.user_id==claims.user_id).values(verification_status=status))
@@ -145,22 +149,25 @@ def test_suspension_effective_with_same_token_and_no_cached_grant(store):
             with pytest.raises(VendorPermissionError): service(store).require_approved_vendor(claims)
 
 
-def test_mutation_callback_shares_transaction_and_rollback(store):
+def test_mutation_callback_shares_transaction_and_rollback(store,monkeypatch):
     _,claims=issue(store)
-    with Session(store.engine) as db, db.begin():
-        db.execute(sa.update(Vendor).where(Vendor.user_id==claims.user_id).values(verification_status='approved'))
+    from tests.review_support import prepare_case
+    prepare_case(store,claims,monkeypatch,approve=True)
+    # An isolated operation table avoids mutating the verified shop evidence.
+    with store.engine.begin() as db:
+        db.exec_driver_sql('CREATE TABLE operation_effects (value TEXT)')
+        db.exec_driver_sql("INSERT INTO operation_effects VALUES ('initial')")
     def write(db, identity):
-        assert db.in_transaction()
-        assert identity.user_id == claims.user_id
-        db.execute(sa.update(Vendor).where(Vendor.id==identity.vendor_id).values(business_name='Changed'))
+        assert db.in_transaction() and identity.user_id == claims.user_id
+        db.execute(sa.text("UPDATE operation_effects SET value='Changed'"))
         return 'committed'
     assert service(store).run_approved_vendor_operation(claims,write) == 'committed'
     def fail(db, identity):
-        write(db,identity)
-        db.execute(sa.update(Vendor).where(Vendor.id==identity.vendor_id).values(business_name='Rolled back'))
+        db.execute(sa.text("UPDATE operation_effects SET value='Rolled back'"))
         raise sa.exc.SQLAlchemyError('private failure')
     with pytest.raises(SessionPersistenceError): service(store).run_approved_vendor_operation(claims,fail)
-    assert service(store).get_vendor_profile(claims).business_name == 'Changed'
+    with store.engine.connect() as db:
+        assert db.exec_driver_sql('SELECT value FROM operation_effects').scalar_one() == 'Changed'
 
 
 def test_mutation_locks_order_and_post_lock_expiry(store):

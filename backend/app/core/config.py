@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     signup_rate_limit_secret: SecretStr | None = None
     login_rate_limit_secret: SecretStr | None = None
     phone_otp_secret: SecretStr | None = None
+    listing_photo_storage_factory: str | None = None
+    sms_delivery_factory: str | None = None
     private_document_storage_backend: str = "disabled"
     private_document_storage_root: str | None = None
     private_document_storage_durable: bool = False

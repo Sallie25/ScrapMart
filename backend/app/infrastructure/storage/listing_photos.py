@@ -28,9 +28,12 @@ class ListingPhotoStorage(Protocol):
 
 
 def get_listing_photo_storage(settings: Settings) -> ListingPhotoStorage:
-    # An approved durable public adapter must replace this factory at deployment.
-    # There is no local/static fallback and no reuse of private ID storage.
-    raise ListingPhotoUnavailable()
+    from app.infrastructure.providers import load_adapter
+    try:
+        return load_adapter(settings.listing_photo_storage_factory, settings,
+                            ('put', 'exists', 'public_url', 'delete'))
+    except Exception:
+        raise ListingPhotoUnavailable() from None
 
 
 def safe_photo_url(storage, key):

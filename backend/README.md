@@ -1337,3 +1337,10 @@ PostgreSQL DDL; they do not establish live PostgreSQL locking behavior. Operatio
 requirements are the existing database, authentication and private evidence-storage
 configuration for new initiation. No messaging provider, WebSockets, Redis Pub/Sub,
 voice calling, push service, frontend or payment integration is required.
+
+## Staging preparation (Stage D2)
+
+See [the staging runbook](deploy/staging/README.md) for the separate migration
+image, explicit empty-database registration activation, provider factory contracts,
+HTTPS/secrets/role requirements and the offline CI workflow. No provider has been
+provisioned and no live migration or deployment has been performed.

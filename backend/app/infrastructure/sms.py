@@ -8,6 +8,10 @@ class SmsDelivery(Protocol):
 
 
 def get_sms_delivery() -> SmsDelivery:
-    # No paid provider is introduced. Deployment must supply an approved adapter.
-    # Offline tests inject an in-memory adapter; there is no demo/development code.
-    raise VerificationInfrastructureUnavailable()
+    from app.core.config import get_settings
+    from app.infrastructure.providers import load_adapter
+    try:
+        settings = get_settings()
+        return load_adapter(settings.sms_delivery_factory, settings, ('send_code',))
+    except Exception:
+        raise VerificationInfrastructureUnavailable() from None

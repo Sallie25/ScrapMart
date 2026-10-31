@@ -1,0 +1,48 @@
+name: Backend offline checks
+on:
+  pull_request:
+    paths: ['backend/**', '.github/workflows/backend-offline.yml']
+  push:
+    branches: [feature/database-models, main]
+    paths: ['backend/**', '.github/workflows/backend-offline.yml']
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      SCRAPMART_RUN_LOCAL_POSTGRES_TESTS: '0'
+      SCRAPMART_RUN_BUYER_LOGIN_POSTGRES_TESTS: '0'
+      SCRAPMART_RUN_LOCAL_REDIS_TESTS: '0'
+      DATABASE_URL: ''
+      REDIS_URL: 'redis://127.0.0.1:1/0'
+      APP_ENVIRONMENT: test
+      JWT_SIGNING_SECRET: ''
+      SIGNUP_RATE_LIMIT_SECRET: ''
+      LOGIN_RATE_LIMIT_SECRET: ''
+      PHONE_OTP_SECRET: ''
+      PRIVATE_DOCUMENT_STORAGE_BACKEND: disabled
+      PRIVATE_DOCUMENT_STORAGE_DURABLE: 'false'
+      AUTH_ALLOWED_ORIGINS: '[]'
+      AUTH_TRUSTED_PROXY_CIDRS: '[]'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.12.0'
+      - name: Install locked runtime and development dependencies
+        run: uv sync --locked --dev
+      - name: Source, startup and migration-head checks
+        run: uv run --no-sync python -B -m scripts.check_staging
+      - name: Offline tests only
+        run: uv run --no-sync python -B -m pytest -p no:cacheprovider -q

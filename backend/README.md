@@ -1184,3 +1184,108 @@ use real evidence review and separate product-photo doubles; they cannot establi
 PostgreSQL trigger/isolation or real provider durability guarantees. No live
 migration, provider provisioning, order/messaging/payment integration or deployment
 has been performed.
+
+## Pay-on-delivery orders MVP (Stage 3B)
+
+No previous Order/OrderItem implementation existed. This stage adds one Order
+and one immutable OrderItem per request, reusing User, BuyerProfile, Vendor,
+Listing, categories, shared sessions and the existing approved-evidence guards.
+There is no cart, payment gateway, messaging integration or payment-received flag.
+Delivery is the Vendor's report; completion is the Buyer's receipt confirmation.
+Neither event asserts that cash was collected.
+
+Buyer endpoints:
+
+- POST `/api/v1/buyer/orders` accepts only listing_id, quantity, and a client UUID
+  request_id. The latter is an idempotency key scoped to the authenticated
+  BuyerProfile. Identical retries return the existing order; reusing the key with
+  a different listing or quantity receives 409, even after the price changes.
+- GET `/api/v1/buyer/orders` and `/{order_id}` return only that Buyer's orders.
+- POST `/api/v1/buyer/orders/{order_id}/cancel` permits pending/accepted orders,
+  before preparation. POST `/{order_id}/complete` permits delivered orders only.
+
+Vendor endpoints:
+
+- GET `/api/v1/vendor/orders` and `/{order_id}` return only orders for that Vendor.
+  Active Vendor identities in all recognized verification states may read their
+  historical obligations; reads do not grant selling permissions.
+- POST `/api/v1/vendor/orders/{order_id}/accept`, `/reject`, `/prepare`, `/deliver`
+  require current approved evidence and ownership. There is no Vendor completion
+  endpoint, Buyer receipt override, or payment-status mutation.
+
+All endpoints require an active User/live bearer session and the relevant explicit
+profile, never User.role. Buyer ineligibility uses the existing generic 401;
+Vendor ineligibility is 403. Cross-owner or missing records receive generic 404,
+stock/state/idempotency conflicts 409, invalid quantities/fields 422, and unavailable
+infrastructure 503. Mutations require existing Origin/CSRF and bounded JSON inputs;
+unknown price, Vendor/Buyer identity, status and payment fields are rejected. Empty
+transition requests or {} are accepted. Every response is no-store. Lists use
+bounded keyset pagination (limit 1–50, default 20), most recent first.
+
+Lifecycle:
+
+- pending -> accepted -> preparing -> delivered -> completed
+- Buyer: pending/accepted -> cancelled, delivered -> completed
+- Vendor: pending -> rejected; only the Vendor advances acceptance/preparation/
+  delivery, and only the Buyer confirms completion.
+
+Repeated transitions are safely rejected with 409. Self-ordering is rejected.
+Read/cancellation/receipt confirmation for existing Buyer orders does not require
+current Vendor approval or storage availability. Suspension therefore blocks new
+selling transitions but does not remove Buyer access or the ability to cancel an
+eligible order/confirm delivered goods. Inactive shared Users still fail their own
+authentication. Returns/disputes and cancellations after preparation are not modeled.
+
+Placement checks an active listing, active category, available stored photos,
+current approved Vendor evidence, quantity and pricing basis inside one transaction.
+It locks Buyer/Vendor User rows in UUID order, the Buyer session/profile, Vendor,
+Listing and category, rechecking expiry after waits/evidence I/O. Reservation changes
+and Vendor transitions lock Listing before Order. The shared User row-version lock
+and bounded serialization/deadlock retries remain in force. No external writes
+occur in retried order transactions. Public photo infrastructure is needed for new
+placement, not for existing-order history or fulfillment transitions.
+
+Inventory uses the authoritative sum of pending, accepted, preparing, delivered
+and completed item quantities under the Listing/owner locks. Only cancellation or
+rejection releases a reservation. Completed quantities remain consumed. Listing
+quantity remains the total offered stock rather than being decremented to zero,
+which would violate its existing positive-quantity constraint. Marketplace output
+adds exact available_quantity and public browsing excludes fully committed stock.
+Increasing a per-unit listing's total is restocking; decreasing it below reserved/
+fulfilled quantities is forbidden. Ordered units/pricing basis cannot change after
+any order history exists. A committed total-price lot cannot change quantity;
+a fulfilled lot should be archived and restocked through a new listing.
+
+Prices come from the locked listing, not the client. listing_price, price_type,
+quantity/unit, title, line total, NGN currency and Vendor display name are immutable
+agreement snapshots. Per-unit totals are calculated with Decimal and rounded once
+HALF_UP to NGN cents; positive prices cannot produce a zero-cost rounded order.
+A total-price listing is an indivisible lot: quantity must equal the full listed
+quantity and the listing price is the entire lot price, not multiplied again.
+The API returns price/quantity strings. The Buyer receives the locked current price
+at creation and may cancel before preparation; a separate quote/negotiation flow
+is not introduced. No online payment or cash-receipt status is inferred.
+
+Listing archival retains the referenced Listing and its images. OrderItem FKs
+restrict physical listing deletion; history uses snapshots, not current listing
+price/title or media. Cancellation/rejection frees inventory without automatically
+reactivating a sold/archived listing. BuyerProfile/Vendor references also restrict
+history deletion. There are no public order listings or automatic contact/identity-
+document disclosures in receipts.
+
+Migration a06d8f2345bc follows f95c7e1234ab and adds orders/order_items, scoped request
+uniqueness, ownership/pagination/inventory indexes, valid-state/amount constraints,
+and immutable snapshot/state-transition triggers. No existing stock, approval or
+prices are changed/backfilled. OrderItem UPDATE/DELETE is blocked, and Order
+agreement fields/timestamps cannot be rewritten. Schema migrations must be applied
+through separately authorized operations before deploying code that queries these
+tables, including the new marketplace availability projection. Downgrade removes
+order history and requires an appropriate backup/retention decision; it is not a
+runtime API operation. No live migration was performed.
+
+Offline tests use isolated SQLite/storage doubles and real existing verification
+workflows. Concurrent placement/request-key tests verify reservation/idempotency
+behavior across separate connections; offline PostgreSQL SQL checks do not establish
+live PostgreSQL isolation or provider readiness. Existing private/public storage,
+SMS/OTP/Redis/reviewer deployment prerequisites remain. No payment, order messages,
+front-end, production operation, commit, push or deployment was performed here.

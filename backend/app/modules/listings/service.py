@@ -125,6 +125,8 @@ class MarketplaceService(VendorAuthorizationService):
                       updated_at=_utc(row.updated_at,db),published_at=_utc(row.published_at,db) if row.published_at else None,
                       photos=self._images(db,row) if images is None else images)
         # Money/quantity stay exact strings in JSON, never binary floats.
+        from app.modules.orders.inventory import available_quantity
+        result['available_quantity']=format(available_quantity(db,row),'.3f')
         result['price']=format(row.price,'.2f') if row.price is not None else None
         result['quantity']=format(row.quantity,'.3f') if row.quantity is not None else None
         for field in ('latitude','longitude'):
@@ -156,6 +158,8 @@ class MarketplaceService(VendorAuthorizationService):
             row=self._owned(db,listing_id,identity.vendor_id)
             if row.status not in {'draft','active','inactive'}: raise ListingConflict('This listing cannot be edited')
             values={**self._values(row),**patch}
+            from app.modules.orders.inventory import validate_inventory_edit
+            validate_inventory_edit(db,row,values)
             self._validate(db,values,consent=value.public_location_consent or not (set(patch)&LOCATION_FIELDS),public=row.status=='active')
             if row.status=='active': self._images(db,row,required=True)
             self._write_time(db,claims)
@@ -263,9 +267,11 @@ class MarketplaceService(VendorAuthorizationService):
         except Exception: pass  # Leave unadvertised objects for reconciliation.
 
     def _public_query(self):
+        from app.modules.orders.inventory import reserved_quantity_expression
         return select(Listing).join(Vendor,Vendor.id==Listing.vendor_id).join(User,User.id==Vendor.user_id).join(
             Category,Category.id==Listing.category_id).where(Listing.status=='active',Vendor.verification_status=='approved',
             Vendor.approval_review_id.is_not(None),User.is_active.is_(True),Category.is_active.is_(True),
+            Listing.quantity>reserved_quantity_expression(),
             select(ListingImage.id).where(ListingImage.listing_id==Listing.id).exists())
 
     def browse(self,*,listing_id=None,limit=20,cursor=None,q=None,category=None,location=None,condition=None,min_price=None,max_price=None):

@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1.orders import router as orders_router
 from app.api.v1.marketplace import router as marketplace_router
 from app.api.v1.buyer_signup import router as buyer_signup_router
 from app.api.v1.buyer_login import router as buyer_login_router
@@ -26,6 +27,7 @@ def create_app() -> FastAPI:
         version=settings.app_version,
     )
 
+    app.include_router(orders_router, prefix="/api/v1")
     app.include_router(marketplace_router, prefix="/api/v1")
     app.include_router(verification_review_router, prefix="/api/v1")
     app.include_router(verification_router, prefix="/api/v1")

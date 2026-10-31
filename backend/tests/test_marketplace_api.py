@@ -9,6 +9,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 from PIL import Image
 
+from app.modules.orders.models import Order,OrderItem
 from app.modules.categories.models import Category
 from app.modules.listings.models import Listing,ListingImage
 from app.modules.vendors.models import Vendor
@@ -43,6 +44,8 @@ def store(review_store,monkeypatch):
         for constraint in table.constraints:
             if isinstance(constraint,sa.UniqueConstraint): constraint.deferrable=None; constraint.initially=None
     metadata.create_all(engine,tables=[metadata.tables[n] for n in ('categories','listings','listing_images')])
+    Order.__table__.create(engine,checkfirst=True)
+    OrderItem.__table__.create(engine,checkfirst=True)
     with engine.connect() as db: db.connection.driver_connection.create_function('trunc',1,math.trunc)
     review_store.photos=PublicPhotos()
     monkeypatch.setattr('app.api.v1.marketplace.get_engine',lambda:engine)

@@ -11,6 +11,7 @@ from app.modules.auth import models as auth_models  # noqa: F401
 from app.modules.auth import session_models as auth_session_models  # noqa: F401
 from app.modules.buyers import models as buyer_models  # noqa: F401
 from app.modules.categories import models as category_models  # noqa: F401
+from app.modules.orders import models as order_models  # noqa: F401
 from app.modules.listings import models as listing_models  # noqa: F401
 from app.modules.vendors import review_models as review_models  # noqa: F401
 from app.modules.vendors import models as vendor_models  # noqa: F401

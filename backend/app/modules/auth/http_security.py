@@ -41,7 +41,7 @@ def clear_refresh_cookie(response: Response) -> None:
 
 def marketplace_path(path):
     return any(path == prefix or path.startswith(prefix + '/') for prefix in
-               ('/api/v1/vendor/listings', '/api/v1/listings', '/api/v1/categories'))
+               ('/api/v1/vendor/listings', '/api/v1/listings', '/api/v1/categories', '/api/v1/buyer/orders', '/api/v1/vendor/orders'))
 
 
 class AuthRequestMiddleware:
@@ -63,7 +63,8 @@ class AuthRequestMiddleware:
                       "/api/v1/auth/me": "Profile request", "/api/v1/auth/logout-all": "Logout"}
         review_path = scope["path"] == "/api/v1/auth/verification/cases" or scope["path"].startswith("/api/v1/auth/verification/cases/")
         submission_path = scope["path"] == "/api/v1/auth/vendor/verification/submit"
-        operation = "Listing request" if marketplace else "Verification review" if review_path or submission_path else operations.get(scope["path"], "Registration")
+        order_path = any(scope["path"] == prefix or scope["path"].startswith(prefix + "/") for prefix in ("/api/v1/buyer/orders", "/api/v1/vendor/orders"))
+        operation = "Order request" if order_path else "Listing request" if marketplace else "Verification review" if review_path or submission_path else operations.get(scope["path"], "Registration")
 
         async def no_store(message: Message) -> None:
             nonlocal response_started

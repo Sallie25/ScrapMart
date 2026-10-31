@@ -55,7 +55,7 @@ def legacy_database():
 
     metadata = sa.MetaData()
     for table in Base.metadata.sorted_tables:
-        if table.name not in NEW_TABLES | {"email_identity_reservations", "email_identity_policy_state"}:
+        if table.name not in NEW_TABLES | {"email_identity_reservations", "email_identity_policy_state", "orders", "order_items"}:
             clone = table.to_metadata(metadata)
             # Existing marketplace UNIQUE is deferred only on PostgreSQL.
             for constraint in clone.constraints:
@@ -331,7 +331,7 @@ def test_migrated_schema_matches_models(database):
         context = MigrationContext.configure(connection, opts={"compare_type": compare_type})
         foundation_metadata = sa.MetaData()
         for table in Base.metadata.sorted_tables:
-            if table.name not in {"email_identity_reservations", "email_identity_policy_state"}:
+            if table.name not in {"email_identity_reservations", "email_identity_policy_state", "orders", "order_items"}:
                 table.to_metadata(foundation_metadata)
         assert compare_metadata(context, foundation_metadata) == []
         inspector = sa.inspect(connection)
@@ -360,7 +360,8 @@ def test_metadata_registration_uuid_defaults_and_digest_only_storage():
 
 def test_offline_postgresql_migration_and_chain():
     scripts = ScriptDirectory(str(ROOT / "alembic"))
-    assert scripts.get_heads() == ["f95c7e1234ab"]
+    assert scripts.get_heads() == ["a06d8f2345bc"]
+    assert scripts.get_revision("a06d8f2345bc").down_revision == "f95c7e1234ab"
     assert scripts.get_revision("f95c7e1234ab").down_revision == "e84b6d0123fa"
     assert scripts.get_revision("e84b6d0123fa").down_revision == "d73a5c9012ef"
     assert scripts.get_revision("d73a5c9012ef").down_revision == "c42f7d18a903"

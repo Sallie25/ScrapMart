@@ -5,6 +5,9 @@ from app.api.v1.buyer_signup import router as buyer_signup_router
 from app.api.v1.buyer_login import router as buyer_login_router
 from app.api.v1.buyer_sessions import router as buyer_sessions_router
 from app.api.v1.buyer_account import router as buyer_account_router
+from app.api.v1.vendor_account import router as vendor_account_router
+from app.api.v1.vendor_login import router as vendor_login_router
+from app.api.v1.vendor_registration import router as vendor_registration_router
 from app.api.v1.health import router as health_router
 from app.core.config import get_settings
 from app.modules.auth.http_security import AuthNoStoreMiddleware, AuthRequestMiddleware
@@ -19,6 +22,9 @@ def create_app() -> FastAPI:
         version=settings.app_version,
     )
 
+    app.include_router(vendor_account_router, prefix="/api/v1")
+    app.include_router(vendor_login_router, prefix="/api/v1")
+    app.include_router(vendor_registration_router, prefix="/api/v1")
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(buyer_signup_router, prefix="/api/v1")
     app.include_router(buyer_login_router, prefix="/api/v1")

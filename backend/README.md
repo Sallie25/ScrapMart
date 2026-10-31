@@ -647,3 +647,133 @@ SCRAPMART_RUN_LOCAL_POSTGRES_TESTS=0 SCRAPMART_RUN_BUYER_LOGIN_POSTGRES_TESTS=0 
 SQLite regression tests include controlled overlap with current-session revocation
 at the User lock boundary. They do not establish PostgreSQL isolation correctness;
 no live PostgreSQL or Redis integration execution is implied by this validation.
+
+## Vendor registration and enrollment (Stage 2D.3)
+
+`POST /api/v1/auth/vendor/signup` accepts required `email`, `password`,
+`full_name`, and `business_name`, plus optional `phone_number`. It uses the
+existing Buyer field/password policy, ASCII V1 identity registry, signup IP/email
+budgets, Origin/CSRF checks, and 16 KiB request limit. Business names are nonblank
+UTF-8 text of at most 200 characters without null characters. Unknown fields,
+including role, ownership and verification status, are rejected.
+
+New reservations, User (`role=vendor`) and Vendor (`verification_status=pending`)
+commit atomically. No BuyerProfile, session or token is created. Existing or
+reserved identities receive the same generic 202 acknowledgment, without account
+linking or modification. The shared reservation-first registration transaction
+retains its collision handling, readiness checks and ambiguous-commit behavior.
+
+`POST /api/v1/auth/vendor/enroll` accepts `business_name` and `current_password`.
+It requires the existing bearer access JWT, exact allowed Origin,
+`X-ScrapMart-CSRF: 1`, application/json, and an active User/live session with an
+explicit BuyerProfile. Current-password verification uses existing login input
+boundaries, including support for older passwords; it holds no row locks.
+Admission then locks User, session and BuyerProfile, rechecking activation,
+session/JWT expiry, revocation and the verified password hash before inserting a
+missing pending Vendor. The User lock serializes concurrent enrollments. An
+existing Vendor is left entirely unchanged, including its name and status.
+Success is an empty 204, with no cookies or tokens. Authentication/password
+failures use the generic invalid-session 401; infrastructure failures are safe
+503 responses. Every response uses Cache-Control: no-store.
+
+Enrollment uses the existing login IP budget and a second HMAC-protected,
+User-ID-bound budget using the existing email counter capacity. The latter is
+independent of a client-supplied email and bounds distributed reauthentication
+attempts. Redis failure denies the operation. Neither endpoint grants approved
+selling permissions, collects verification documents, changes Buyer behavior, or
+introduces a migration.
+
+Offline Vendor concurrency tests use separate SQLite connections and synchronized
+workers. They verify uniqueness and rollback behavior, but do not establish
+PostgreSQL isolation guarantees. Live PostgreSQL and Redis tests are separate.
+
+## Vendor login and session admission (Stage 2D.4)
+
+`POST /api/v1/auth/vendor/login` accepts the existing strict email/password login
+input. It requires an active User and an explicit Vendor record; `User.role` and
+BuyerProfile do not grant Vendor eligibility. Pending, approved and rejected
+Vendors may authenticate. Suspended Vendors may provisionally authenticate for
+restricted status access. Login does not approve verification or grant listing,
+order, selling or review permissions. Future Vendor operations must check live
+verification status, explicit operation permissions and ownership independently.
+
+The credential lookup uses the ready ASCII V1 registry and requires an owned
+reservation matching the stored email. Argon2 verification runs after that read
+transaction ends, with existing dummy work for unknown/ineligible identities or
+unusable hashes. Admission then rechecks readiness, reservation ownership, stored
+email, unchanged verified password hash, activation and Vendor status using the
+existing transaction runner. Lock order is policy SHARE, reservation SHARE,
+User version update, then Vendor SHARE. Locks remain held through session commit;
+new session time is sampled after locks. The runtime database role must support
+Vendor SHARE locking with appropriate least-privilege grants before deployment;
+this change does not provision database roles or permissions.
+
+The endpoint reuses the Buyer login HTTP parser and guards, including the exact
+same Redis IP/email counters. Alternating Buyer/Vendor login endpoints does not
+multiply the existing budgets. Origin/CSRF checks, trusted-proxy handling, strict
+JSON input, 16 KiB body limit, no-store responses and sanitized errors remain in
+force. Invalid credentials receive the same generic 401; required infrastructure
+failures fail closed without issuing credentials.
+
+Success returns the existing access-token response and sets the same host-only
+Secure/HttpOnly/SameSite=Lax refresh cookie at `/api/v1/auth`. JWTs contain identity
+and session claims, without verification permissions. Session tables, expiry,
+rotation/replay detection, refresh, logout and user-wide revocation are unchanged.
+A dual-profile identity retains Buyer access; Vendor-only identities do not gain
+BuyerProfile. The shared browser cookie represents the most recent login, not
+separate simultaneous Buyer/Vendor cookie sessions.
+
+Vendor tests use disposable SQLite and Redis doubles. Mutable-state tests commit
+changes between password verification and admission and verify rejection or the
+current recognized status. These tests do not establish live PostgreSQL lock or
+isolation guarantees; live PostgreSQL/Redis validation remains separate.
+
+## Vendor profile, authorization and account selection (Stage 2D.5)
+
+`GET /api/v1/auth/vendor/me` requires the existing bearer JWT, an active User,
+a live owned session and an explicit Vendor. It returns exactly `business_name`,
+`verification_status`, `full_name`, `email`, nullable `phone_number`, and
+`created_at` (the Vendor registration timestamp in UTC). Pending, approved,
+rejected and provisionally suspended Vendors may read their profile/status.
+Neither legacy User.role nor token claims establish profile or selling eligibility.
+
+`GET /api/v1/auth/capabilities` returns exactly `buyer`, `vendor` (profile-existence
+booleans), and nullable `vendor_verification_status`. Both endpoints use live
+joined reads, validate JWT expiry again against service time, project safe fields
+without loading password hashes, and send Cache-Control: no-store. Invalid
+credentials/live sessions receive generic 401; a valid identity without a Vendor
+receives generic 403 on Vendor profile access. Infrastructure failures receive
+safe 503 responses. No Origin/CSRF header is required for these bearer-only reads.
+
+Account selection is client presentation state: a shared session can access each
+existing profile, regardless of which login endpoint issued it. Capabilities are
+a snapshot for account selection, not an authorization grant. Reading/selecting
+an experience does not create profiles, link emails, modify role/status, issue
+credentials, or persist a selected mode. Vendor-only identities still fail the
+existing Buyer /me and logout-all eligibility checks. Buyer logout-all retains its
+user-wide revocation behavior, including sessions used for Vendor access.
+
+`VendorAuthorizationService.get_vendor_profile` provides authenticated profile
+access. `require_approved_vendor` provides live approved-only authorization for
+reads and returns internal User/Vendor identity for resource ownership checks.
+Pending, rejected and suspended Vendors cannot pass selling authorization.
+Verification changes take effect on the next operation with the same JWT.
+
+Future protected mutations must use `run_approved_vendor_operation(claims,
+operation)`, not authorize in one transaction and write in another. This helper
+uses the shared transaction runner, bounded retries and User row-version update;
+locks User, then session, then Vendor FOR SHARE; and samples time after admission
+locks before invoking the callback. The callback receives that same database
+Session and internal identity. It must check resource ownership/operation rules,
+lock resources after the admission locks, and perform all writes on that Session.
+It must not commit, roll back, use another transaction, return ORM objects, or
+perform external effects because the entire operation may be retried.
+
+Verification writers must update the same Vendor row, conflicting with its SHARE
+lock until the operation commits. Writers that also lock User must follow the
+User-before-Vendor order. Session revocation already follows the shared User and
+session lock order. The runtime role needs the appropriate least-privilege grants
+for Vendor SHARE locks; no grants or migrations are introduced here. Read snapshots
+do not claim mutation race safety. Offline tests inspect the PostgreSQL lock SQL
+and transaction behavior; they do not prove PostgreSQL concurrency semantics.
+No listing/order endpoints or verification collection are added in this stage.

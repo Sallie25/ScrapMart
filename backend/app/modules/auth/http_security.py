@@ -49,7 +49,9 @@ class AuthRequestMiddleware:
             return
 
         response_started = False
-        operations = {"/api/v1/auth/buyer/signup": "Registration", "/api/v1/auth/buyer/login": "Login",
+        operations = {"/api/v1/auth/vendor/me": "Profile request",
+                      "/api/v1/auth/capabilities": "Account request", "/api/v1/auth/vendor/login": "Login", "/api/v1/auth/vendor/signup": "Registration",
+                      "/api/v1/auth/vendor/enroll": "Enrollment", "/api/v1/auth/buyer/signup": "Registration", "/api/v1/auth/buyer/login": "Login",
                       "/api/v1/auth/refresh": "Refresh", "/api/v1/auth/logout": "Logout",
                       "/api/v1/auth/me": "Profile request", "/api/v1/auth/logout-all": "Logout"}
         operation = operations.get(scope["path"], "Registration")

@@ -55,6 +55,12 @@ class BuyerRegistrationService:
             and str(orig) == "UNIQUE constraint failed: email_identity_reservations.lookup_key"
         )
 
+    _new_user_role = UserRole.BUYER.value
+
+    def _add_profile(self, db, user_id, signup):
+        now = db.scalar(select(func.current_timestamp()))
+        db.add(BuyerProfile(user_id=user_id, created_at=now, signup_completed_at=now))
+
     def register(self, signup: BuyerSignupRequest) -> None:
         try:
             key = canonical_registration_key(signup.email)
@@ -96,10 +102,9 @@ class BuyerRegistrationService:
                                     db.flush()
                                     db.add(User(id=user_id, email=key, password_hash=password_hash,
                                                 full_name=signup.full_name, phone_number=signup.phone_number,
-                                                role=UserRole.BUYER.value))
+                                                role=self._new_user_role))
                                     db.flush()
-                                    now = db.scalar(select(func.current_timestamp()))
-                                    db.add(BuyerProfile(user_id=user_id, created_at=now, signup_completed_at=now))
+                                    self._add_profile(db, user_id, signup)
                                     db.flush()
                                 committing = True
                             return  # Includes successful deferred-constraint commit.

@@ -1344,3 +1344,11 @@ See [the staging runbook](deploy/staging/README.md) for the separate migration
 image, explicit empty-database registration activation, provider factory contracts,
 HTTPS/secrets/role requirements and the offline CI workflow. No provider has been
 provisioned and no live migration or deployment has been performed.
+
+## Restricted runtime compatibility (Stage D3)
+
+Migration `c28fa4567def` follows `b17e9a3456cd`, preserving rows while guarding
+Buyer-profile/category/listing identifiers and hardening photo-function search
+paths. The [runtime role runbook](deploy/staging/runtime-role.md) documents the
+staging-only provisioner, explicit column grants, PUBLIC privilege handling and
+trusted-backend authorization limits. No Neon or Render changes were performed.

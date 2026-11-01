@@ -22,8 +22,8 @@ def main():
         with TestClient(create_app()) as client:
             assert client.get('/api/v1/health').status_code == 200
     scripts = ScriptDirectory.from_config(Config('alembic.ini'))
-    assert scripts.get_heads() == ['b17e9a3456cd']
-    assert len(list(scripts.walk_revisions())) == 10
+    assert scripts.get_heads() == ['c28fa4567def']
+    assert len(list(scripts.walk_revisions())) == 11
     print('Source, secret-free startup and single-head migration checks passed.')
 
 

@@ -8,7 +8,7 @@ from sqlalchemy import text
 from app.modules.auth.email_identity_models import POLICY_STATE_ID
 from app.modules.auth.email_identity_policy import policy_fingerprint
 
-HEAD = 'b17e9a3456cd'
+HEAD = 'c28fa4567def'
 FINGERPRINT = 'cbdc5198ab2b1c3f23062e5318c97f0ab4e403023a69035e355bc8e8c431e59f'
 
 

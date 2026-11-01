@@ -65,7 +65,7 @@ maintenance run --rm maintenance ...` invocation. Never put this in API startup,
 Compose dependencies or automatic production deployment hooks. The image can also
 be invoked via `python -B -m app.operations.staging` from a controlled source checkout.
 
-`migrate` runs the unchanged ten-revision chain to b17e9a3456cd, inside a controlled
+`migrate` runs the eleven-revision chain to c28fa4567def, inside a controlled
 connection transaction after checking actual database/user and primary status.
 `bootstrap-empty` requires that exact single database revision, the approved email
 policy fingerprint, enabled non-security-definer registration guards, validated
@@ -145,7 +145,7 @@ credentials in factory strings or reuse private-document credentials for photos.
 ## CI and acceptance
 
 The GitHub workflow installs the lockfile on Python 3.13, performs source/import/
-startup and ten-revision head checks without real secrets, and runs offline tests
+startup and eleven-revision head checks without real secrets, and runs offline tests
 with all three live integration switches disabled. It has no deployment or cloud
 credentials. It does not replace approved disposable PostgreSQL/Redis integration,
 real adapter tests, restricted-role checks, or staging browser/cookie acceptance.
@@ -153,3 +153,8 @@ real adapter tests, restricted-role checks, or staging browser/cookie acceptance
 No full suite was rerun for D2. Previously: latest full messaging run 1,158 passed,
 305 skipped, one SQLite concurrency-fixture failure; the fixture was fixed and
 92 focused tests passed. Do not report the full post-fix suite as passing.
+
+## Restricted runtime role (Stage D3)
+
+See [runtime-role.md](runtime-role.md) for additive guards, explicit column ACLs,
+PUBLIC privilege handling, limitations and disposable PostgreSQL validation.

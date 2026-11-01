@@ -360,7 +360,8 @@ def test_metadata_registration_uuid_defaults_and_digest_only_storage():
 
 def test_offline_postgresql_migration_and_chain():
     scripts = ScriptDirectory(str(ROOT / "alembic"))
-    assert scripts.get_heads() == ["b17e9a3456cd"]
+    assert scripts.get_heads() == ["c28fa4567def"]
+    assert scripts.get_revision("c28fa4567def").down_revision == "b17e9a3456cd"
     assert scripts.get_revision("b17e9a3456cd").down_revision == "a06d8f2345bc"
     assert scripts.get_revision("a06d8f2345bc").down_revision == "f95c7e1234ab"
     assert scripts.get_revision("f95c7e1234ab").down_revision == "e84b6d0123fa"

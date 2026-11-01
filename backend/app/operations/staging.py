@@ -7,16 +7,19 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool
 from app.operations.staging_bootstrap import BootstrapRejected, activate_empty, check_target
 
-HEAD = 'b17e9a3456cd'
+HEAD = 'c28fa4567def'
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=('migrate', 'bootstrap-empty'))
+    parser.add_argument('operation', choices=('migrate', 'bootstrap-empty', 'provision-runtime'))
     parser.add_argument('--expected-database', required=True)
     parser.add_argument('--expected-role', required=True)
     parser.add_argument('--confirm-staging', action='store_true', required=True)
+    parser.add_argument("--harden-public", action="store_true", help="Explicitly remove staging PUBLIC CREATE/TEMP privileges")
     args = parser.parse_args(argv)
+    if args.harden_public and args.operation != "provision-runtime":
+        parser.error("--harden-public is only valid for provision-runtime")
     url = os.environ.get('STAGING_MAINTENANCE_DATABASE_URL')
     if os.environ.get('APP_ENVIRONMENT') != 'staging' or not url:
         parser.exit(1, 'Staging maintenance configuration is required.\n')
@@ -35,8 +38,11 @@ def main(argv=None):
                     config = Config('alembic.ini')
                     config.attributes['connection'] = db
                     command.upgrade(config, HEAD)
-                else:
+                elif args.operation == "bootstrap-empty":
                     activate_empty(db)
+                else:
+                    from app.operations.runtime_role import provision
+                    provision(db, harden_public=args.harden_public)
         print('Staging maintenance completed.')
     except Exception:
         # A lost commit acknowledgement is ambiguous: never claim rollback/retry.

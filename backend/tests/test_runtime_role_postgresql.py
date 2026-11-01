@@ -77,7 +77,15 @@ def database():
         config=Config('alembic.ini');config.attributes['connection']=db
         command.upgrade(config,HEAD)
         activate_empty(db)
-        provision(db,harden_public=True)
+        # Simulate Neon service access via PostgreSQL's existing PUBLIC TEMP,
+        # without ever creating/modifying actual provider-managed role names.
+        db.exec_driver_sql('CREATE ROLE d3_simulated_provider NOLOGIN')
+        before=db.execute(sa.text("SELECT rolname,rolcanlogin,rolsuper,rolcreatedb,rolcreaterole,rolinherit,rolreplication,rolbypassrls FROM pg_roles WHERE rolname='d3_simulated_provider'")).one()
+        assert db.scalar(sa.text("SELECT has_database_privilege('d3_simulated_provider',current_database(),'TEMPORARY')"))
+        provision(db)
+        after=db.execute(sa.text("SELECT rolname,rolcanlogin,rolsuper,rolcreatedb,rolcreaterole,rolinherit,rolreplication,rolbypassrls FROM pg_roles WHERE rolname='d3_simulated_provider'")).one()
+        assert tuple(before)==tuple(after)
+        assert db.scalar(sa.text("SELECT has_database_privilege('d3_simulated_provider',current_database(),'TEMPORARY')"))
         db.exec_driver_sql(f'ALTER ROLE {ROLE} LOGIN')  # Localhost-only trust auth; no embedded password.
     runtime=sa.create_engine(url(ROLE),hide_parameters=True)
     yield SimpleNamespace(admin=admin,runtime=runtime)
@@ -219,7 +227,6 @@ def test_messaging_isolation_and_retry_concurrency(approved):
     'TRUNCATE public.users CASCADE',
     "SET session_replication_role='replica'",
     'SET ROLE postgres',
-    'CREATE TEMP TABLE runtime_forbidden (id int)',
     'UPDATE public.users SET is_active=true',
     'UPDATE public.verification_review_audit SET reason=reason',
     'DELETE FROM public.orders',
@@ -277,12 +284,16 @@ def test_database_setting_drift_and_grant_options_rejected(store):
     with store.admin.begin() as db: audit(db)
 
 
-def test_public_privilege_drift_fails_without_repair_flag(store):
-    with store.admin.begin() as db: db.exec_driver_sql('GRANT TEMPORARY ON DATABASE scrapmart_staging TO PUBLIC')
+@pytest.mark.parametrize('grant_option',[False,True])
+def test_direct_temp_grant_is_rejected_even_with_public_temp(store,grant_option):
+    with store.admin.begin() as db:
+        db.exec_driver_sql(f'GRANT TEMPORARY ON DATABASE scrapmart_staging TO {ROLE}'+(' WITH GRANT OPTION' if grant_option else ''))
     try:
         with pytest.raises(RuntimeRoleRejected),store.admin.begin() as db: provision(db)
     finally:
-        with store.admin.begin() as db: db.exec_driver_sql('REVOKE TEMPORARY ON DATABASE scrapmart_staging FROM PUBLIC')
+        with store.admin.begin() as db:
+            db.exec_driver_sql(f'REVOKE TEMPORARY ON DATABASE scrapmart_staging FROM {ROLE}')
+    with store.admin.begin() as db: audit(db,require_complete=True)
 
 
 def test_membership_and_ownership_drift_rejected(store):
@@ -355,3 +366,65 @@ def test_safe_operator_reverse_membership_is_not_runtime_elevation(store):
             assert not db.scalar(sa.text("SELECT pg_has_role(current_user,'postgres','MEMBER')"))
     finally:
         with store.admin.begin() as db: db.exec_driver_sql(f'REVOKE {ROLE} FROM postgres')
+
+
+def test_public_temp_is_preserved_without_direct_or_provider_grants(store):
+    def snapshot(db):
+        return db.execute(sa.text("""SELECT a.grantee,a.grantor,a.privilege_type,a.is_grantable
+            FROM pg_database d CROSS JOIN LATERAL aclexplode(COALESCE(d.datacl,acldefault('d',d.datdba))) a
+            WHERE d.datname=current_database() AND a.grantee IN
+              (0,(SELECT oid FROM pg_roles WHERE rolname='d3_simulated_provider'))
+            ORDER BY a.grantee,a.privilege_type""")).all()
+    with store.admin.begin() as db:
+        before=snapshot(db);provision(db);provision(db)
+        assert snapshot(db)==before
+        for role in (ROLE,'d3_simulated_provider'):
+            assert db.scalar(sa.text("SELECT has_database_privilege(:role,current_database(),'TEMPORARY')"),{'role':role})
+            assert not db.scalar(sa.text("""SELECT EXISTS (SELECT 1 FROM pg_database d
+                CROSS JOIN LATERAL aclexplode(COALESCE(d.datacl,acldefault('d',d.datdba))) a
+                WHERE d.datname=current_database() AND a.grantee=(SELECT oid FROM pg_roles WHERE rolname=:role)
+                AND a.privilege_type='TEMPORARY')"""),{'role':role})
+    # TEMP works, but persistent schema/database CREATE is still forbidden.
+    with store.runtime.begin() as db:
+        db.exec_driver_sql('CREATE TEMP TABLE d3_temp_allowed (id int) ON COMMIT DROP')
+        db.exec_driver_sql('INSERT INTO pg_temp.d3_temp_allowed VALUES (1)')
+        assert db.scalar(sa.text('SELECT count(*) FROM pg_temp.d3_temp_allowed'))==1
+    with store.admin.begin() as db: audit(db,require_complete=True)
+
+
+def test_direct_temp_without_public_temp_is_not_accepted(store):
+    # Scratch-only ACL perturbation, never used by the provisioner. Restore the
+    # provider-style PUBLIC grant even when the negative audit raises.
+    with store.admin.begin() as db:
+        db.exec_driver_sql('REVOKE TEMPORARY ON DATABASE scrapmart_staging FROM PUBLIC')
+        db.exec_driver_sql(f'GRANT TEMPORARY ON DATABASE scrapmart_staging TO {ROLE}')
+    try:
+        with pytest.raises(RuntimeRoleRejected),store.admin.begin() as db: provision(db)
+    finally:
+        with store.admin.begin() as db:
+            db.exec_driver_sql(f'REVOKE TEMPORARY ON DATABASE scrapmart_staging FROM {ROLE}')
+            db.exec_driver_sql('GRANT TEMPORARY ON DATABASE scrapmart_staging TO PUBLIC')
+
+
+@pytest.mark.parametrize('sql,undo',[
+    ('GRANT CREATE ON DATABASE scrapmart_staging TO PUBLIC','REVOKE CREATE ON DATABASE scrapmart_staging FROM PUBLIC'),
+    ('GRANT CREATE ON SCHEMA public TO PUBLIC','REVOKE CREATE ON SCHEMA public FROM PUBLIC'),
+    (f'GRANT CREATE ON DATABASE scrapmart_staging TO {ROLE}',f'REVOKE CREATE ON DATABASE scrapmart_staging FROM {ROLE}'),
+])
+def test_create_privilege_drift_is_rejected_with_public_temp(store,sql,undo):
+    with store.admin.begin() as db: db.exec_driver_sql(sql)
+    try:
+        with pytest.raises(RuntimeRoleRejected),store.admin.begin() as db: provision(db)
+    finally:
+        with store.admin.begin() as db: db.exec_driver_sql(undo)
+    with store.admin.begin() as db: audit(db,require_complete=True)
+
+
+def test_runtime_temp_shadow_does_not_bypass_photo_guard(approved):
+    key=listing(approved)
+    with pytest.raises(sa.exc.DBAPIError) as error,approved.runtime.begin() as db:
+        db.exec_driver_sql('CREATE TEMP TABLE listing_images (listing_id uuid)')
+        db.execute(sa.text('INSERT INTO pg_temp.listing_images VALUES (:id)'),{'id':key})
+        db.exec_driver_sql('SET LOCAL search_path=pg_temp,public,pg_catalog')
+        db.execute(sa.text('DELETE FROM public.listing_images WHERE listing_id=:id'),{'id':key})
+    assert error.value.orig.sqlstate=='23514'

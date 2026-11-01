@@ -16,10 +16,7 @@ def main(argv=None):
     parser.add_argument('--expected-database', required=True)
     parser.add_argument('--expected-role', required=True)
     parser.add_argument('--confirm-staging', action='store_true', required=True)
-    parser.add_argument("--harden-public", action="store_true", help="Explicitly remove staging PUBLIC CREATE/TEMP privileges")
     args = parser.parse_args(argv)
-    if args.harden_public and args.operation != "provision-runtime":
-        parser.error("--harden-public is only valid for provision-runtime")
     url = os.environ.get('STAGING_MAINTENANCE_DATABASE_URL')
     if os.environ.get('APP_ENVIRONMENT') != 'staging' or not url:
         parser.exit(1, 'Staging maintenance configuration is required.\n')
@@ -42,7 +39,7 @@ def main(argv=None):
                     activate_empty(db)
                 else:
                     from app.operations.runtime_role import provision
-                    provision(db, harden_public=args.harden_public)
+                    provision(db)
         print('Staging maintenance completed.')
     except Exception:
         # A lost commit acknowledgement is ambiguous: never claim rollback/retry.

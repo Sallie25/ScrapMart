@@ -17,8 +17,9 @@ Application-side session, ownership, reviewer and approved-evidence checks remai
 3. Apply the migration through the existing explicit staging maintenance job only
    after approval. The maintenance job's new target is c28fa4567def (eleven revisions).
    Never roll out the restricted credential before the guards exist.
-4. Inspect PUBLIC privileges on the staging database/schema and other users before
-   choosing whether to authorize --harden-public. See the scope below.
+4. Inspect PUBLIC privileges on the staging database/schema. Existing PUBLIC TEMP
+   is accepted without revocation; database/schema CREATE and direct runtime TEMP
+   grants are rejected. Never change Neon-managed service roles. See below.
 5. Securely inject STAGING_MAINTENANCE_DATABASE_URL into the maintenance process,
    APP_ENVIRONMENT=staging, then invoke its entrypoint with:
 
@@ -27,9 +28,9 @@ Application-side session, ownership, reviewer and approved-evidence checks remai
    ```
 
    OPERATOR_ROLE is the independently verified existing maintenance role, not the
-   new runtime role. Use --harden-public only with explicit approval to remove the
-   staging PUBLIC CREATE/TEMP privileges described below. No password or URL is
-   accepted on the command line. The API never receives this maintenance variable.
+   new runtime role. The former --harden-public option has been removed: it is
+   rejected before any connection is opened. No password or URL is accepted on the
+   command line. The API never receives this maintenance variable.
 6. Inspect the results using the restricted role and approved staging acceptance
    tests. The provisioner creates scrapmart_staging_api NOLOGIN, with no password.
    Establish its authentication and enable LOGIN through separately approved secret
@@ -68,7 +69,8 @@ are 17 application tables plus alembic_version, and no application sequences.
 Table-wide SELECT/INSERT/UPDATE grants are rejected even if all current columns
 would be allowed, avoiding automatic permission expansion when columns are added.
 
-- Database CONNECT and public schema USAGE only. No schema/database CREATE, TEMP,
+- Explicit database CONNECT and public schema USAGE; TEMP may be inherited only
+  from the existing PUBLIC grant. No direct runtime TEMP, schema/database CREATE,
   TRIGGER, REFERENCES, TRUNCATE, ownership, grant options, elevated attributes or
   outward role memberships. No runtime permissions on alembic_version.
 - SELECT current columns on application tables, narrowed to id/status/policy_version
@@ -98,17 +100,39 @@ Unexpected members, settings, ownership, grant options, custom executable SECURI
 DEFINER functions and session_replication_role permissions cause rejection. Existing
 roles must carry the expected D3 marker; unrelated same-name roles are not reused.
 
-If PUBLIC already grants CREATE on public or CREATE/TEMP on scrapmart_staging,
-revoking only from this role cannot remove those inherited rights. Without the
-flag, provisioning fails and rolls back. Explicit --harden-public removes only
-PUBLIC CREATE on public and PUBLIC CREATE/TEMP on scrapmart_staging. It does not
-revoke CONNECT, table rights, default privileges, memberships, existing owner
-privileges, other named-role privileges, or anything in another database/branch.
-Owners retain their rights. Inventory non-owner consumers first and separately
-restore any justified named grants before rollout. Other unexpected PUBLIC rights
-cause rejection rather than broad revocation. Roles can retain ordinary PUBLIC
-CONNECT to other databases on the same staging branch; this procedure does not
-claim to change cluster-wide access policy or production branch credentials.
+### Neon compatibility and inherited TEMP
+
+Neon's existing PUBLIC TEMP grant is deliberately retained. A managed service role
+can depend on that grant without a direct TEMP ACL of its own. Revoking PUBLIC TEMP
+would also remove that effective permission from those service roles. This tool
+never grants, revokes or alters permissions/attributes/memberships belonging to
+cloud_admin, neon_service or neon_superuser, and never changes PUBLIC ACLs.
+The old --harden-public command option and core revocation path have been removed.
+
+The audit expands pg_database.datacl, using acldefault when the catalog stores NULL.
+Effective runtime TEMP is accepted only when the PUBLIC ACL supplies non-grantable
+TEMP and the runtime has no direct database ACL except non-grantable CONNECT.
+A redundant direct TEMP grant is rejected even when PUBLIC TEMP also exists;
+direct TEMP without PUBLIC TEMP, TEMP grant options, outward role memberships,
+ownership, schema/database CREATE and excess application permissions still fail.
+If PUBLIC TEMP is absent and the runtime has no effective TEMP, provisioning also
+works; the tool does not grant TEMP to compensate. Existing PUBLIC CONNECT and
+schema USAGE are preserved. PUBLIC CREATE is rejected without automatic repair.
+Other unexpected PUBLIC privileges still cause rollback rather than revocation.
+
+TEMP permits creating and writing temporary relations. It does not grant permanent
+schema CREATE, ownership of application tables or changes to their guards. The D3
+photo functions use qualified tables and fixed pg_catalog search paths; disposable
+tests verify temporary-table shadowing cannot bypass those guards. Ordinary ORM
+queries still use session search paths, so TEMP adds temporary-object and resource
+abuse risks if the API credential is compromised. The default search path puts
+pg_catalog/public before pg_temp, but the credential holder can change its session
+settings. This remains a trusted-backend role, not full-compromise or per-user SQL
+isolation. Use operational connection/resource limits and protect the credential.
+
+Roles can retain ordinary PUBLIC CONNECT to other databases on the same staging
+branch; this procedure does not change cluster-wide access policy or production
+branch credentials. Neon adoption still requires separate target/grant inspection.
 
 ## Disposable validation
 
@@ -130,7 +154,8 @@ The tests cover real ORM signup/login, refresh/revoke, Vendor row locks, OTP/doc
 verification, reviewer approval, image INSERT/DELETE and commit-time guard rollback,
 concurrent stock reservations, fulfillment, messaging participants/retries/read
 receipts, forbidden policy/reviewer/DDL operations, identifier immutability,
-PUBLIC/column/settings/membership/ownership/schema drift and idempotency. The suite
+PUBLIC TEMP provenance, unchanged simulated provider permissions, direct TEMP
+rejection, CREATE/column/settings/membership/ownership/schema drift and idempotency. The suite
 is skipped by default and must stay disabled in ordinary offline CI. After a run,
 stop/remove only the verified disposable container; never reset existing databases
 or repoint historical fixtures. PostgreSQL/Neon version, network and provider

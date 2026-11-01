@@ -35,3 +35,46 @@ def test_acl_manifest_excludes_maintenance_and_privileged_columns():
     assert 'id' in MANIFEST['UPDATE']['listings']
     for tables in MANIFEST.values():
         for table,columns in tables.items(): assert columns <= COLUMNS[table]
+
+
+class DatabaseAcl:
+    def __init__(self,acl,*,create=False,temp=False,grantable_temp=False):
+        self.acl=acl;self.create=create;self.temp=temp;self.grantable_temp=grantable_temp
+    def execute(self,statement,parameters=None):
+        from types import SimpleNamespace
+        sql=str(statement)
+        if 'aclexplode' in sql: return SimpleNamespace(all=lambda:self.acl)
+        value=self.grantable_temp if 'WITH GRANT OPTION' in sql else self.create if "'CREATE'" in sql else self.temp
+        return SimpleNamespace(scalar_one=lambda:value)
+
+
+def test_public_temp_only_is_accepted_with_or_without_runtime_connect():
+    from app.operations.runtime_role import audit_database_privileges
+    for acl in ([(0,'TEMPORARY',False)],[(0,'TEMPORARY',False),(42,'CONNECT',False)]):
+        audit_database_privileges(DatabaseAcl(acl,temp=True),42)
+    audit_database_privileges(DatabaseAcl([],temp=False),42)
+
+
+def test_direct_temp_and_other_database_privilege_drift_rejected():
+    import pytest
+    from app.operations.runtime_role import audit_database_privileges,RuntimeRoleRejected
+    for acl in ([(0,'TEMPORARY',False),(42,'TEMPORARY',False)],
+                [(42,'TEMPORARY',False)],[(42,'TEMPORARY',True)],
+                [(42,'CONNECT',True)],[(42,'CREATE',False)]):
+        with pytest.raises(RuntimeRoleRejected):
+            audit_database_privileges(DatabaseAcl(acl,temp=True),42)
+    for db in (DatabaseAcl([],temp=True),DatabaseAcl([(0,'TEMPORARY',False)],temp=True,create=True),
+               DatabaseAcl([(0,'TEMPORARY',False)],temp=True,grantable_temp=True)):
+        with pytest.raises(RuntimeRoleRejected): audit_database_privileges(db,42)
+
+
+def test_removed_public_hardening_flag_fails_before_connect(monkeypatch,capsys):
+    import pytest
+    from unittest.mock import Mock
+    from app.operations import staging
+    create=Mock();monkeypatch.setattr(staging,'create_engine',create)
+    with pytest.raises(SystemExit):
+        staging.main(['provision-runtime','--confirm-staging','--expected-database','scrapmart_staging',
+                      '--expected-role','operator','--harden-public'])
+    create.assert_not_called()
+    assert 'unrecognized arguments: --harden-public' in capsys.readouterr().err

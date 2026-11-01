@@ -63,6 +63,28 @@ def require(condition):
     if not condition: raise RuntimeRoleRejected()
 
 
+def audit_database_privileges(db, role_oid):
+    """TEMP is allowed only via PUBLIC, never a direct runtime ACL or membership.
+
+    acldefault handles the normal PostgreSQL NULL datacl representation. Owners
+    and outward memberships are independently rejected by audit(). No ACLs on
+    PUBLIC or provider-managed roles are changed by this provisioner.
+    """
+    acl = db.execute(text("""SELECT a.grantee,a.privilege_type,a.is_grantable
+        FROM pg_catalog.pg_database d
+        CROSS JOIN LATERAL pg_catalog.aclexplode(
+            COALESCE(d.datacl,pg_catalog.acldefault('d',d.datdba))) a
+        WHERE d.datname=current_database()""")).all()
+    require(all(privilege == 'CONNECT' and not grantable
+                for grantee, privilege, grantable in acl if grantee == role_oid))
+    public_temp = any(grantee == 0 and privilege == 'TEMPORARY' and not grantable
+                      for grantee, privilege, grantable in acl)
+    require(not db.execute(text("SELECT has_database_privilege(:role,current_database(),'CREATE')"), {'role': ROLE}).scalar_one())
+    effective_temp = db.execute(text("SELECT has_database_privilege(:role,current_database(),'TEMPORARY')"), {'role': ROLE}).scalar_one()
+    require(effective_temp == public_temp)
+    require(not db.execute(text("SELECT has_database_privilege(:role,current_database(),'TEMPORARY WITH GRANT OPTION')"), {'role': ROLE}).scalar_one())
+
+
 def audit(db, *, require_complete=False):
     """Reject excess effective ACLs, PUBLIC paths, grant options and role drift."""
     role = db.execute(text('''SELECT oid, rolsuper, rolcreatedb, rolcreaterole, rolinherit,
@@ -84,8 +106,7 @@ def audit(db, *, require_complete=False):
         WHERE roleid=:oid AND NOT (member=(SELECT oid FROM pg_catalog.pg_roles WHERE rolname=current_user)
         AND admin_option AND NOT inherit_option AND NOT set_option))'''), {'oid': oid}).scalar_one())
     require(not db.execute(text("SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_shdepend WHERE refclassid='pg_authid'::regclass AND refobjid=:oid AND deptype='o')"), {'oid': oid}).scalar_one())
-    for privilege in ('CREATE', 'TEMPORARY'):
-        require(not db.execute(text('SELECT has_database_privilege(:role,current_database(),:p)'), {'role': ROLE, 'p': privilege}).scalar_one())
+    audit_database_privileges(db, oid)
     # Reject CREATE in every schema, including privilege inherited from PUBLIC.
     require(not db.execute(text('SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_namespace WHERE has_schema_privilege(:role,oid,\'CREATE\'))'), {'role': ROLE}).scalar_one())
     objects = db.execute(text("""SELECT c.oid,n.nspname,c.relname,c.relkind FROM pg_catalog.pg_class c
@@ -120,7 +141,7 @@ def audit(db, *, require_complete=False):
     require(not db.execute(text("SELECT has_parameter_privilege(:role,'session_replication_role','SET,ALTER SYSTEM')"), {'role': ROLE}).scalar_one())
 
 
-def provision(db, *, harden_public=False):
+def provision(db):
     require(db.dialect.name == 'postgresql' and db.in_transaction())
     require(not db.dialect.detect_autocommit_setting(db.connection.driver_connection))
     identity = db.execute(text('SELECT current_database(),pg_is_in_recovery(),current_user')).one()
@@ -134,12 +155,6 @@ def provision(db, *, harden_public=False):
         db.execute(text("SET LOCAL createrole_self_grant=''"))
         db.execute(text(f'CREATE ROLE {ROLE} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS'))
         db.execute(text(f"COMMENT ON ROLE {ROLE} IS 'ScrapMart staging API ACL manifest D3'"))
-    if harden_public:
-        # Only the named staging database/schema; no default ACLs or other roles.
-        # Object/database owners retain implicit privileges. Review other users
-        # before explicitly authorizing this removal of PUBLIC privileges.
-        db.execute(text(f'REVOKE TEMPORARY, CREATE ON DATABASE {DATABASE} FROM PUBLIC'))
-        db.execute(text('REVOKE CREATE ON SCHEMA public FROM PUBLIC'))
     audit(db)  # Existing unexpected privileges are rejected, never silently revoked.
     objects = db.execute(text("SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname='public'")).scalars().all()
     require(set(objects) == set(COLUMNS) | {'alembic_version'})

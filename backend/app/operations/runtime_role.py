@@ -141,21 +141,29 @@ def audit(db, *, require_complete=False):
     require(not db.execute(text("SELECT has_parameter_privilege(:role,'session_replication_role','SET,ALTER SYSTEM')"), {'role': ROLE}).scalar_one())
 
 
-def provision(db):
+def provision(db, *, report=lambda operation: None):
+    report("preconditions")
     require(db.dialect.name == 'postgresql' and db.in_transaction())
     require(not db.dialect.detect_autocommit_setting(db.connection.driver_connection))
     identity = db.execute(text('SELECT current_database(),pg_is_in_recovery(),current_user')).one()
     require(identity[0] == DATABASE and identity[1] is False and identity[2] != ROLE)
+    report("state-locks")
     db.execute(text('LOCK TABLE public.alembic_version IN SHARE MODE'))
     db.execute(text('LOCK TABLE public.email_identity_policy_state IN SHARE MODE'))
     require(db.execute(text('SELECT version_num FROM public.alembic_version')).scalars().all() == [HEAD])
     require(db.execute(text("SELECT count(*) FROM public.email_identity_policy_state WHERE status='ready' AND policy_version=1")).scalar_one() == 1)
     db.execute(text("SELECT pg_advisory_xact_lock(754031893245)"))
+    report("role-state")
     if not db.execute(text('SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname=:role)'), {'role': ROLE}).scalar_one():
+        report("role-create-settings")
         db.execute(text("SET LOCAL createrole_self_grant=''"))
+        report("create-role")
         db.execute(text(f'CREATE ROLE {ROLE} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS'))
+        report("role-comment")
         db.execute(text(f"COMMENT ON ROLE {ROLE} IS 'ScrapMart staging API ACL manifest D3'"))
+    report("initial-audit")
     audit(db)  # Existing unexpected privileges are rejected, never silently revoked.
+    report("schema-checks")
     objects = db.execute(text("SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname='public'")).scalars().all()
     require(set(objects) == set(COLUMNS) | {'alembic_version'})
     # Verify the new identifier fences are present/enabled before granting locks.
@@ -171,11 +179,17 @@ def provision(db):
         AND p.proname IN ('scrapmart_lock_image_listing','scrapmart_check_listing_images')
         AND NOT p.prosecdef AND p.proconfig=ARRAY['search_path=pg_catalog']""")).scalars().all()
     require(set(functions) == {'scrapmart_lock_image_listing', 'scrapmart_check_listing_images'})
+    report("grant-database")
     db.execute(text(f'GRANT CONNECT ON DATABASE {DATABASE} TO {ROLE}'))
+    report("grant-schema")
     db.execute(text(f'GRANT USAGE ON SCHEMA public TO {ROLE}'))
+    report("grant-columns")
     for privilege, tables in MANIFEST.items():
         for table, columns in tables.items():
             db.execute(text(f'GRANT {privilege} ({", ".join(sorted(columns))}) ON public.{table} TO {ROLE}'))
+    report("grant-delete")
     db.execute(text(f'GRANT DELETE ON public.listing_images TO {ROLE}'))
+    report("role-search-path")
     db.execute(text(f'ALTER ROLE {ROLE} IN DATABASE {DATABASE} SET search_path=pg_catalog,public,pg_temp'))
+    report("final-audit")
     audit(db, require_complete=True)

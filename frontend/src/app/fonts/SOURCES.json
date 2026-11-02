@@ -1,0 +1,22 @@
+[
+  {
+    "family": "DM Sans",
+    "url": "https://fonts.gstatic.com/s/dmsans/v17/rP2Yp2ywxg089UriI5-g4vlH9VoD8Cmcqbu0-K4.woff2",
+    "file": "dm-sans.woff2"
+  },
+  {
+    "family": "Geist",
+    "url": "https://fonts.gstatic.com/s/geist/v5/gyByhwUxId8gMEwcGFU.woff2",
+    "file": "geist.woff2"
+  },
+  {
+    "family": "Geist Mono",
+    "url": "https://fonts.gstatic.com/s/geistmono/v6/or3nQ6H-1_WfwkMZI_qYFrcdmg.woff2",
+    "file": "geist-mono.woff2"
+  },
+  {
+    "family": "Manrope",
+    "url": "https://fonts.gstatic.com/s/manrope/v23/xn7gYHE41ni1AdIRggexSg.woff2",
+    "file": "manrope.woff2"
+  }
+]

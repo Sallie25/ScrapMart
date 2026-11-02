@@ -1,0 +1,48 @@
+/* Tokens from the approved App.tsx/index.css export; isolated from shared UI. */
+
+.landing-page {
+  --landing-brand: #08783e;
+  --landing-brand-dark: #064829;
+  --landing-brand-light: #74d99b;
+  --landing-brand-soft: #e8f7ee;
+  --landing-ink: #14211a;
+  --landing-muted: #627067;
+  --landing-canvas: #f5f7f5;
+  --landing-line: #dfe6e1;
+  min-width: 320px;
+  font-family: var(--font-landing-dm-sans), sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.landing-page button {
+  cursor: pointer;
+}
+.landing-page :is(button, a, summary):focus-visible {
+  outline: 3px solid #74d99b;
+  outline-offset: 4px;
+}
+.landing-page [id] {
+  scroll-margin-top: 7rem;
+}
+.landing-eyebrow {
+  color: #08783e;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.landing-section-title {
+  margin-top: 0.25rem;
+  color: #14211a;
+  font-family: var(--font-landing-manrope), sans-serif;
+  font-size: clamp(1.5rem, 2.5vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-page *,
+  .landing-page *::before,
+  .landing-page *::after {
+    transition-duration: 0s !important;
+    animation: none !important;
+  }
+}

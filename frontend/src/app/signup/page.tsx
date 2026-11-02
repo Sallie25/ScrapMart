@@ -12,10 +12,12 @@ export default async function SignupPage({
   const vendor = role === "vendor";
   return (
     <AuthShell>
-      <div className="auth-panel mx-auto grid max-w-5xl overflow-hidden rounded-3xl lg:grid-cols-[.72fr_1fr]">
+      <div
+        className={`auth-panel mx-auto grid max-w-5xl overflow-hidden rounded-3xl lg:grid-cols-[.72fr_1fr] ${vendor ? "auth-vendor-signup" : ""}`}
+      >
         <aside className="auth-dark-panel hidden p-9 text-white lg:block">
           <span className="auth-step-badge inline-flex rounded-full px-3 py-1 text-xs font-bold">
-            Registration preview
+            {vendor ? "Step 1 of 3" : "Registration preview"}
           </span>
           <h2 className="auth-display mt-7 text-4xl font-extrabold">
             {vendor

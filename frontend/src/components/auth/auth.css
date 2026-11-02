@@ -154,3 +154,40 @@
     transition: none !important;
   }
 }
+
+/* Compact Vendor registration only; Buyer and login retain their layouts. */
+.sm-auth .auth-vendor-signup form {
+  margin-top: 1.25rem;
+}
+.sm-auth .auth-vendor-signup form > .grid {
+  gap: 0.75rem 1rem;
+}
+.sm-auth .auth-vendor-signup form > label {
+  margin-top: 1rem;
+  font-weight: 500;
+}
+.sm-auth .auth-vendor-signup form > .auth-button {
+  margin-top: 1rem;
+}
+@media (min-width: 1024px) {
+  .sm-auth .auth-vendor-signup > section {
+    padding: 1.75rem;
+  }
+  .sm-auth .auth-vendor-signup .auth-back {
+    min-height: 2rem;
+    margin-bottom: 0.75rem;
+  }
+  .sm-auth .auth-vendor-signup input:not([type="checkbox"]):not([type="file"]),
+  .sm-auth .auth-vendor-signup select,
+  .sm-auth .auth-vendor-signup .auth-password-toggle,
+  .sm-auth .auth-vendor-signup .auth-upload {
+    min-height: 2.75rem;
+    padding: 0.5rem 0.75rem;
+  }
+  .sm-auth .auth-vendor-signup > section > p:nth-last-child(2) {
+    margin-top: 1rem;
+  }
+  .sm-auth .auth-vendor-signup > section > p:last-child {
+    margin-top: 0.5rem;
+  }
+}

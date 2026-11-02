@@ -42,7 +42,9 @@ export function SignupForm({ role }: { role: "buyer" | "vendor" }) {
       className="mt-7"
       noValidate
     >
-      <p className="auth-muted mb-5 text-xs leading-relaxed">
+      <p
+        className={`auth-muted mb-5 text-xs leading-relaxed ${vendor ? "sr-only" : ""}`}
+      >
         Demo only · Details are validated in this form and are not sent or
         stored. No account or OTP is created.
       </p>
@@ -86,7 +88,11 @@ export function SignupForm({ role }: { role: "buyer" | "vendor" }) {
                 placeholder="15–128 characters"
                 autoComplete="new-password"
                 required
-                helper="15–128 characters. Unicode and spaces are allowed; not only whitespace. No null characters or invalid Unicode text."
+                helper={
+                  vendor
+                    ? "15–128 characters; Unicode and spaces allowed."
+                    : "15–128 characters. Unicode and spaces are allowed; not only whitespace. No null characters or invalid Unicode text."
+                }
                 error={fieldError("password")}
                 {...register("password")}
               />
@@ -167,21 +173,20 @@ export function SignupForm({ role }: { role: "buyer" | "vendor" }) {
           </>
         )}
       </div>
-      <p className="auth-helper mt-4 text-xs leading-relaxed">
+      <p
+        className={`auth-helper mt-4 text-xs leading-relaxed ${vendor ? "sr-only" : ""}`}
+      >
         Passwords are checked against the backend signup rules without trimming
         or changing them. This is a demo; use a sample password, not a real one.
       </p>
       {vendor && (
-        <div id="identity-demo" className="auth-status mt-5">
-          <h2 className="auth-display font-extrabold">
-            Vendor verification required
-          </h2>
-          <p>
-            Government-ID upload, storage and administrator review are not
-            connected. Submitting this demo does not verify or approve a vendor.
-            Publishing will require actual approval.
-          </p>
-        </div>
+        <p
+          id="identity-demo"
+          className="auth-helper mt-3 text-xs leading-relaxed"
+        >
+          ID upload and review are unavailable. Shop details are a separate
+          onboarding step; nothing is sent or stored here.
+        </p>
       )}
       <label className="auth-muted mt-5 flex cursor-pointer items-start gap-3 text-sm font-medium">
         <input
@@ -195,7 +200,17 @@ export function SignupForm({ role }: { role: "buyer" | "vendor" }) {
           }
           {...register("previewConsent")}
         />
-        <span>I understand this is a demo and no account will be created.</span>
+        <span>
+          {vendor ? (
+            <>
+              I understand this is a demo.{" "}
+              <strong>Terms and Privacy Policy</strong> are not connected; no
+              account will be created.
+            </>
+          ) : (
+            "I understand this is a demo and no account will be created."
+          )}
+        </span>
       </label>
       {fieldError("previewConsent") && (
         <p
@@ -206,11 +221,14 @@ export function SignupForm({ role }: { role: "buyer" | "vendor" }) {
           {fieldError("previewConsent")}
         </p>
       )}
-      <p id="preview-terms" className="auth-helper mt-2 text-xs">
+      <p
+        id="preview-terms"
+        className={`auth-helper mt-2 text-xs ${vendor ? "sr-only" : ""}`}
+      >
         Terms and Privacy Policy pages are not available yet.
       </p>
       <Button type="submit" block className="auth-button mt-6">
-        Preview {role} registration
+        {vendor ? "Create account (demo)" : `Preview ${role} registration`}
       </Button>
       {submitted && (
         <section role="status" className="auth-status mt-5">

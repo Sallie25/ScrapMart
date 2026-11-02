@@ -1,74 +1,67 @@
-
 import Link from "next/link";
-import { SiteHeader } from "@/components/layout/site-header";
+import { AuthShell, AuthBack } from "@/components/auth/auth-shell";
 import { SignupForm } from "@/components/forms/signup-form";
-import { Badge } from "@/components/ui/badge";
-import { Container } from "@/components/ui/container";
-
-type SignupPageProps = {
-  searchParams: Promise<{
-    role?: string;
-  }>;
-};
 
 export default async function SignupPage({
   searchParams,
-}: SignupPageProps) {
-  const params = await searchParams;
-  const role = params.role === "vendor" ? "vendor" : "buyer";
-  const isVendor = role === "vendor";
-
+}: {
+  searchParams: Promise<{ role?: string }>;
+}) {
+  const { role: requestedRole } = await searchParams;
+  const role = requestedRole === "vendor" ? "vendor" : "buyer";
+  const vendor = role === "vendor";
   return (
-    <>
-      <SiteHeader />
-
-      <main className="min-h-screen bg-background px-4 py-12 sm:py-16">
-        <Container size="narrow">
-          <div className="mx-auto max-w-lg">
-            <div className="mb-8 text-center">
-              <Badge variant="success">
-                {isVendor ? "Vendor registration" : "Buyer registration"}
-              </Badge>
-
-              <h1 className="mt-4 text-3xl font-bold tracking-tight text-text">
-                {isVendor
-                  ? "Create your vendor account"
-                  : "Create your buyer account"}
-              </h1>
-
-              <p className="mt-3 text-sm leading-6 text-muted">
-                {isVendor
-                  ? "Register your business to list scrap materials and connect with buyers."
-                  : "Create an account to discover materials and connect with vendors."}
-              </p>
-            </div>
-
-            <SignupForm role={role} />
-
-            <p className="mt-6 text-center text-sm text-muted">
-              Already have an account?{" "}
-              <Link
-                href="/login"
-                className="font-semibold text-primary hover:underline"
-              >
-                Log in
-              </Link>
-            </p>
-
-            <p className="mt-4 text-center text-sm text-muted">
-              {isVendor
-                ? "Want to buy materials instead?"
-                : "Want to sell scrap materials instead?"}{" "}
-              <Link
-                href={`/signup?role=${isVendor ? "buyer" : "vendor"}`}
-                className="font-semibold text-primary hover:underline"
-              >
-                Switch registration type
-              </Link>
+    <AuthShell>
+      <div className="auth-panel mx-auto grid max-w-5xl overflow-hidden rounded-3xl lg:grid-cols-[.72fr_1fr]">
+        <aside className="auth-dark-panel hidden p-9 text-white lg:block">
+          <span className="auth-step-badge inline-flex rounded-full px-3 py-1 text-xs font-bold">
+            Registration preview
+          </span>
+          <h2 className="auth-display mt-7 text-4xl font-extrabold">
+            {vendor
+              ? "Set up your shop and reach buyers."
+              : "Start finding scrap near you."}
+          </h2>
+          <p className="mt-4 text-slate-300">
+            {vendor
+              ? "Vendor identity review is planned to help keep ScrapMart safe for everyone."
+              : "Discover local materials and always pay on delivery."}
+          </p>
+          <div className="mt-10 rounded-2xl bg-white/10 p-5">
+            <p className="text-sm font-bold text-[#74d99b]">Safety first</p>
+            <p className="mt-2 text-sm leading-relaxed text-slate-300">
+              {vendor
+                ? "Identification upload and review are not connected. Do not submit identity documents in this demo."
+                : "Your details stay in this form. No account is created in this demo."}
             </p>
           </div>
-        </Container>
-      </main>
-    </>
+        </aside>
+        <section className="min-w-0 p-6 md:p-9">
+          <AuthBack href={`/onboarding?intent=${vendor ? "sell" : "buy"}`} />
+          <h1 className="auth-display text-3xl font-extrabold">
+            Create {role} account
+          </h1>
+          <p className="auth-muted mt-2 text-sm">
+            Fill in the required details to preview registration.
+          </p>
+          <SignupForm key={role} role={role} />
+          <p className="auth-muted mt-5 text-center text-sm">
+            Already have an account?{" "}
+            <Link className="auth-green font-bold" href={`/login?role=${role}`}>
+              Log in
+            </Link>
+          </p>
+          <p className="auth-muted mt-3 text-center text-sm">
+            {vendor ? "Want to buy instead?" : "Want to sell instead?"}{" "}
+            <Link
+              className="auth-green font-bold"
+              href={`/signup?role=${vendor ? "buyer" : "vendor"}`}
+            >
+              Switch registration type
+            </Link>
+          </p>
+        </section>
+      </div>
+    </AuthShell>
   );
 }

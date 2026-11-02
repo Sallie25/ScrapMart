@@ -1,144 +1,85 @@
-
 "use client";
 
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import type { SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  loginSchema,
-  type LoginFormValues,
-} from "@/lib/validations/auth";
+import { AuthField } from "@/components/auth/auth-field";
+import { loginSchema, type LoginFormValues } from "@/lib/validations/auth";
 
-export function LoginForm() {
+export function LoginForm({ role = "buyer" }: { role?: "buyer" | "vendor" }) {
   const [showPassword, setShowPassword] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-
   const {
     register,
     handleSubmit,
     formState: { errors },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
-      loginIdentifier: "",
-      password: "",
-    },
+    defaultValues: { email: "", password: "" },
   });
-
-  const onSubmit: SubmitHandler<LoginFormValues> = () => {
-    // Prototype only: no credentials are sent to a server.
-    setSubmitted(true);
-  };
-
   return (
-    <Card>
-      <form
-        onSubmit={handleSubmit(onSubmit)}
-        className="space-y-5"
-        noValidate
-      >
-        <div>
-          <Label htmlFor="loginIdentifier" required>
-            Login identifier
-          </Label>
-
-          <Input
-            id="loginIdentifier"
-            type="text"
-            placeholder="Enter your login identifier"
-            autoComplete="username"
-            error={Boolean(errors.loginIdentifier)}
-            aria-invalid={Boolean(errors.loginIdentifier)}
-            aria-describedby={
-              errors.loginIdentifier
-                ? "loginIdentifier-error"
-                : undefined
-            }
-            {...register("loginIdentifier")}
-          />
-
-          {errors.loginIdentifier && (
-            <p
-              id="loginIdentifier-error"
-              role="alert"
-              className="mt-1.5 text-sm text-error"
-            >
-              {errors.loginIdentifier.message}
-            </p>
-          )}
-        </div>
-
-        <div>
-          <div className="mb-1.5 flex items-center justify-between gap-3">
-            <Label htmlFor="password" required>
-              Password
-            </Label>
-
-            <Link
-              href="/forgot-password"
-              className="text-sm font-medium text-primary hover:underline"
-            >
-              Forgot password?
-            </Link>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Input
-              id="password"
+    <form
+      onSubmit={handleSubmit(() => setSubmitted(true))}
+      onChange={() => setSubmitted(false)}
+      className="mt-6 grid gap-4"
+      noValidate
+    >
+      <p className="auth-muted text-xs leading-relaxed">
+        Demo only · Use an email address to preview sign-in. No credentials are
+        sent or stored.
+      </p>
+      <AuthField
+        id="login-email"
+        label="Email address"
+        type="email"
+        autoComplete="username"
+        placeholder="name@example.com"
+        required
+        error={errors.email?.message}
+        {...register("email")}
+      />
+      <div>
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <AuthField
+              id="login-password"
+              label="Password"
               type={showPassword ? "text" : "password"}
-              placeholder="Enter your password"
               autoComplete="current-password"
-              error={Boolean(errors.password)}
-              aria-invalid={Boolean(errors.password)}
-              aria-describedby={
-                errors.password ? "password-error" : undefined
-              }
-              className="min-w-0"
+              placeholder="Your password"
+              required
+              error={errors.password?.message}
               {...register("password")}
             />
-
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setShowPassword((current) => !current)}
-              aria-label={showPassword ? "Hide password" : "Show password"}
-            >
-              {showPassword ? "Hide" : "Show"}
-            </Button>
           </div>
-
-          {errors.password && (
-            <p
-              id="password-error"
-              role="alert"
-              className="mt-1.5 text-sm text-error"
-            >
-              {errors.password.message}
-            </p>
-          )}
-        </div>
-
-        <Button type="submit" block>
-          Log in
-        </Button>
-
-        {submitted && (
-          <p
-            role="status"
-            className="rounded-lg border border-border bg-background p-3 text-sm text-text"
+          <button
+            type="button"
+            className="auth-password-toggle mt-6"
+            onClick={() => setShowPassword(!showPassword)}
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            aria-pressed={showPassword}
           >
-            Validation passed. This prototype does not authenticate
-            users yet.
-          </p>
-        )}
-      </form>
-    </Card>
+            {showPassword ? "Hide" : "Show"}
+          </button>
+        </div>
+      </div>
+      <Link
+        href={`/forgot-password?role=${role}`}
+        className="auth-green w-fit text-sm font-bold"
+      >
+        Forgot password?
+      </Link>
+      <Button type="submit" block className="auth-button mt-2">
+        Log in
+      </Button>
+      {submitted && (
+        <p role="status" className="auth-status">
+          Validation passed. This prototype does not authenticate users or start
+          a session. No sign-in request was sent.
+        </p>
+      )}
+    </form>
   );
 }

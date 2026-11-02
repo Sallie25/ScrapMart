@@ -1,40 +1,58 @@
-
 import Link from "next/link";
-import { SiteHeader } from "@/components/layout/site-header";
+import { AuthShell } from "@/components/auth/auth-shell";
 import { LoginForm } from "@/components/forms/login-form";
-import { Container } from "@/components/ui/container";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ role?: string }>;
+}) {
+  const { role: requestedRole } = await searchParams;
+  const role = requestedRole === "vendor" ? "vendor" : "buyer";
   return (
-    <>
-      <SiteHeader />
-
-      <main className="min-h-screen bg-background px-4 py-12 sm:py-16">
-        <Container size="narrow">
-          <div className="mx-auto max-w-lg">
-            <div className="mb-8 text-center">
-              <h1 className="text-3xl font-bold tracking-tight text-text">
-                Welcome back
-              </h1>
-              <p className="mt-3 text-sm leading-6 text-muted">
-                Log in to continue buying or selling materials on ScrapMart.
-              </p>
-            </div>
-
-            <LoginForm />
-
-            <p className="mt-6 text-center text-sm text-muted">
-              Don&apos;t have an account?{" "}
-              <Link
-                href="/onboarding"
-                className="font-semibold text-primary hover:underline"
-              >
-                Get started
-              </Link>
+    <AuthShell>
+      <div className="auth-panel mx-auto grid max-w-4xl overflow-hidden rounded-3xl md:grid-cols-[.8fr_1fr]">
+        <aside className="auth-dark-panel p-8 text-white">
+          <span className="auth-step-badge inline-flex rounded-full px-3 py-1 text-xs font-bold">
+            Welcome back
+          </span>
+          <h2 className="auth-display mt-6 text-3xl font-extrabold">
+            Your marketplace is ready.
+          </h2>
+          <p className="mt-3 text-sm leading-relaxed text-slate-300">
+            Sign in to access your saved orders, listings and messages when
+            authentication is connected.
+          </p>
+          <div className="mt-8 rounded-2xl bg-white/10 p-4">
+            <p className="text-xs font-bold uppercase tracking-wider text-[#74d99b]">
+              Signing in as
             </p>
+            <p className="auth-display mt-1 text-xl font-extrabold">
+              {role === "buyer" ? "Buyer" : "Vendor"}
+            </p>
+            <Link
+              href={`/login?role=${role === "buyer" ? "vendor" : "buyer"}`}
+              className="mt-3 inline-block text-sm font-bold text-white underline underline-offset-4"
+            >
+              Switch to {role === "buyer" ? "Vendor" : "Buyer"}
+            </Link>
           </div>
-        </Container>
-      </main>
-    </>
+        </aside>
+        <section className="min-w-0 p-7 md:p-9">
+          <p className="auth-eyebrow">{role} sign in</p>
+          <h1 className="auth-title">Welcome back</h1>
+          <LoginForm key={role} role={role} />
+          <p className="auth-muted mt-5 text-center text-sm">
+            New to ScrapMart?{" "}
+            <Link
+              href={`/onboarding?intent=${role === "vendor" ? "sell" : "buy"}`}
+              className="auth-green font-bold"
+            >
+              Create an account
+            </Link>
+          </p>
+        </section>
+      </div>
+    </AuthShell>
   );
 }

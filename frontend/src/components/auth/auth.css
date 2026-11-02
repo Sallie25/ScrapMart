@@ -1,0 +1,156 @@
+/* Approved AuthShell/RoleSelect/Signup/Login styling; scoped to Batch A. */
+.sm-auth {
+  --auth-brand: #08783e;
+  --auth-dark: #064829;
+  --auth-soft: #e8f7ee;
+  --auth-light: #74d99b;
+  --auth-ink: #14211a;
+  --auth-muted: #627067;
+  --auth-line: #dfe6e1;
+  background: #f5f7f5;
+  color: var(--auth-ink);
+  min-width: 320px;
+  font-family: var(--font-auth-dm), sans-serif;
+}
+.sm-auth .auth-display,
+.sm-auth .auth-title {
+  font-family: var(--font-auth-manrope), sans-serif;
+}
+.sm-auth .auth-title {
+  margin-top: 0.25rem;
+  color: var(--auth-ink);
+  font-size: clamp(1.5rem, 2.5vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+}
+.sm-auth .auth-eyebrow {
+  color: var(--auth-brand);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.sm-auth .auth-green {
+  color: var(--auth-brand);
+}
+.sm-auth .auth-muted,
+.sm-auth .auth-helper,
+.sm-auth .auth-back {
+  color: var(--auth-muted);
+}
+.sm-auth .auth-badge {
+  background: var(--auth-soft);
+  color: var(--auth-dark);
+}
+.sm-auth .auth-logo-icon,
+.sm-auth .auth-button {
+  background: var(--auth-brand);
+}
+.sm-auth .auth-dark-panel {
+  background: var(--auth-dark);
+}
+.sm-auth .auth-ink-panel {
+  background: var(--auth-ink);
+}
+.sm-auth .auth-panel {
+  background: white;
+  box-shadow: 0 8px 30px rgba(16, 42, 28, 0.07);
+}
+.sm-auth .auth-step-badge {
+  background: #ecfdf5;
+  color: #065f46;
+}
+.sm-auth label {
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.sm-auth input:not([type="checkbox"]):not([type="file"]),
+.sm-auth select {
+  min-height: 3rem;
+  width: 100%;
+  border: 1px solid var(--auth-line);
+  border-radius: 0.75rem;
+  padding: 0.65rem 1rem;
+  background: white;
+  color: var(--auth-ink);
+  font-size: 1rem;
+  font-weight: 500;
+  outline: none;
+}
+.sm-auth input::placeholder {
+  color: var(--auth-muted);
+  opacity: 0.75;
+}
+.sm-auth input:not([type="checkbox"]):focus,
+.sm-auth select:focus {
+  border-color: var(--auth-brand);
+  box-shadow: 0 0 0 4px rgb(8 120 62/0.1);
+}
+.sm-auth input[aria-invalid="true"] {
+  border-color: #b91c1c;
+}
+.sm-auth .auth-button,
+.sm-auth .auth-link-button {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  padding: 0.625rem 1rem;
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  transition:
+    background-color 0.2s,
+    transform 0.2s;
+}
+.sm-auth .auth-link-button {
+  background: var(--auth-brand);
+}
+.sm-auth .auth-button:hover,
+.sm-auth .auth-link-button:hover {
+  background: var(--auth-dark);
+  transform: translateY(-1px);
+}
+.sm-auth .auth-password-toggle {
+  min-height: 3rem;
+  border: 1px solid var(--auth-line);
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--auth-soft);
+  color: var(--auth-dark);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.sm-auth .auth-status {
+  border: 1px solid var(--auth-line);
+  border-radius: 1rem;
+  padding: 1rem;
+  background: var(--auth-soft);
+  color: var(--auth-dark);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.sm-auth :is(button, a, input, select):focus-visible {
+  outline: 3px solid var(--auth-light);
+  outline-offset: 3px;
+}
+.sm-auth input[type="checkbox"] {
+  accent-color: var(--auth-brand);
+}
+.sm-auth :disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+.sm-auth .auth-upload {
+  border: 1px dashed rgb(8 120 62/0.4);
+  background: var(--auth-soft);
+  color: var(--auth-dark);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sm-auth * {
+    transition: none !important;
+  }
+}

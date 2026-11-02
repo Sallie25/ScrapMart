@@ -1,125 +1,90 @@
-
 import Link from "next/link";
-import { SiteHeader } from "@/components/layout/site-header";
-import { Card } from "@/components/ui/card";
-import { Container } from "@/components/ui/container";
-import { Badge } from "@/components/ui/badge";
-
-type OnboardingPageProps = {
-  searchParams: Promise<{
-    intent?: string;
-  }>;
-};
+import { AuthShell } from "@/components/auth/auth-shell";
+import { AuthIcon } from "@/components/auth/auth-icon";
 
 export default async function OnboardingPage({
   searchParams,
-}: OnboardingPageProps) {
-  const params = await searchParams;
-  const intent = params.intent;
-
-  const selectedIntent =
-    intent === "buy" || intent === "sell" ? intent : null;
-
+}: {
+  searchParams: Promise<{ intent?: string }>;
+}) {
+  const { intent } = await searchParams;
   return (
-    <>
-      <SiteHeader />
-
-      <main className="min-h-screen bg-background py-12 sm:py-20">
-        <Container size="narrow">
-          <div className="mb-10 text-center">
-            <Badge variant="success">Welcome to ScrapMart</Badge>
-
-            <h1 className="mt-5 text-3xl font-bold tracking-tight text-text sm:text-4xl">
-              What would you like to do?
-            </h1>
-
-            <p className="mt-4 text-base leading-7 text-muted">
-              Choose how you want to use ScrapMart. You can get started
-              with the journey that suits you.
+    <AuthShell>
+      <div className="mx-auto max-w-4xl text-center">
+        <p className="auth-eyebrow">Let’s get you started</p>
+        <h1 className="auth-display mt-3 text-4xl font-extrabold tracking-tight">
+          What do you want to do?
+        </h1>
+        <p className="auth-muted mt-3">
+          Choose an option. You can explore the other side later.
+        </p>
+        <div className="mt-10 grid gap-5 md:grid-cols-2">
+          <article
+            className={`auth-panel rounded-3xl border-2 p-7 text-left transition hover:border-[#08783e] ${intent === "buy" ? "border-[#08783e]" : "border-transparent"}`}
+          >
+            <span className="auth-badge grid size-14 place-items-center rounded-2xl">
+              <AuthIcon name="bag" className="size-7" />
+            </span>
+            <h2 className="auth-display mt-6 text-2xl font-extrabold">
+              Buy scrap
+            </h2>
+            <p className="auth-muted mt-2 min-h-12">
+              Find clothes, scrap, used items and materials near you.
             </p>
-          </div>
-
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Card
-              className={`flex flex-col ${
-                selectedIntent === "buy"
-                  ? "border-2 border-primary"
-                  : ""
-              }`}
-            >
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-green-100 text-2xl">
-                🛒
-              </div>
-
-              <h2 className="text-xl font-bold text-text">
-                I want to buy
-              </h2>
-
-              <p className="mt-3 flex-1 text-sm leading-6 text-muted">
-                Discover scrap materials, compare listings, find vendors,
-                and arrange delivery with payment on delivery.
+            {intent === "buy" && (
+              <p className="auth-green mt-3 text-sm font-bold">
+                Your selection
               </p>
-
-              {selectedIntent === "buy" && (
-                <p className="mt-3">
-                  <Badge variant="success">Your selection</Badge>
-                </p>
-              )}
-
-              <Link
-                href="/signup?role=buyer"
-                className="mt-6 inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-3 font-medium text-white transition-colors hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-              >
-                Continue as a buyer
-              </Link>
-            </Card>
-
-            <Card
-              className={`flex flex-col ${
-                selectedIntent === "sell"
-                  ? "border-2 border-primary"
-                  : ""
-              }`}
-            >
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-green-100 text-2xl">
-                ♻️
-              </div>
-
-              <h2 className="text-xl font-bold text-text">
-                I want to sell
-              </h2>
-
-              <p className="mt-3 flex-1 text-sm leading-6 text-muted">
-                Create a vendor account, complete identity verification,
-                publish your scrap listings, and manage orders.
-              </p>
-
-              {selectedIntent === "sell" && (
-                <p className="mt-3">
-                  <Badge variant="success">Your selection</Badge>
-                </p>
-              )}
-
-              <Link
-                href="/signup?role=vendor"
-                className="mt-6 inline-flex w-full items-center justify-center rounded-md border border-border bg-surface px-4 py-3 font-medium text-text transition-colors hover:bg-background focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-              >
-                Continue as a vendor
-              </Link>
-            </Card>
-          </div>
-
-          <p className="mt-8 text-center text-sm text-muted">
-            Already have an account?{" "}
+            )}
             <Link
-              href="/login"
-              className="font-semibold text-primary underline-offset-4 hover:underline"
+              className="auth-link-button mt-6 w-full"
+              href="/signup?role=buyer"
             >
-              Log in
+              Create buyer account
             </Link>
-          </p>
-        </Container>
-      </main>
-    </>
+            <Link
+              href="/login?role=buyer"
+              className="auth-green mt-3 block w-full py-2 text-center text-sm font-bold"
+            >
+              I already have a buyer account
+            </Link>
+          </article>
+          <article
+            className={`auth-ink-panel rounded-3xl border-2 p-7 text-left text-white shadow-sm transition hover:border-[#74d99b] ${intent === "sell" ? "border-[#74d99b]" : "border-transparent"}`}
+          >
+            <span className="grid size-14 place-items-center rounded-2xl bg-white/10 text-[#74d99b]">
+              <AuthIcon name="store" className="size-7" />
+            </span>
+            <h2 className="auth-display mt-6 text-2xl font-extrabold">
+              Sell scrap
+            </h2>
+            <p className="mt-2 min-h-12 text-slate-300">
+              List your scrap and reach local buyers.
+            </p>
+            {intent === "sell" && (
+              <p className="mt-3 text-sm font-bold text-[#74d99b]">
+                Your selection
+              </p>
+            )}
+            <Link
+              className="auth-link-button mt-6 w-full"
+              href="/signup?role=vendor"
+            >
+              Create vendor account
+            </Link>
+            <Link
+              href="/login?role=vendor"
+              className="mt-3 block w-full py-2 text-center text-sm font-bold text-[#74d99b]"
+            >
+              I already have a vendor account
+            </Link>
+          </article>
+        </div>
+        <p className="auth-muted mt-6 text-xs">
+          Presentation prototype · Registration and sign-in are not connected
+          yet.
+        </p>
+      </div>
+    </AuthShell>
   );
 }

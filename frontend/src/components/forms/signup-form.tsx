@@ -1,212 +1,237 @@
-
 "use client";
 
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import type { SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { AuthField } from "@/components/auth/auth-field";
+import { AuthIcon } from "@/components/auth/auth-icon";
 import {
   buyerSignupSchema,
   vendorSignupSchema,
-  type BuyerSignupValues,
-  type VendorSignupValues,
+  type SignupFormValues,
 } from "@/lib/validations/auth";
 
-type SignupFormProps = {
-  role: "buyer" | "vendor";
-};
-
-export function SignupForm({ role }: SignupFormProps) {
+export function SignupForm({ role }: { role: "buyer" | "vendor" }) {
+  const vendor = role === "vendor";
   const [submitted, setSubmitted] = useState(false);
-  const isVendor = role === "vendor";
-
-  const form = useForm<BuyerSignupValues | VendorSignupValues>({
-    resolver: zodResolver(
-      isVendor ? vendorSignupSchema : buyerSignupSchema,
-    ),
+  const [showPassword, setShowPassword] = useState(false);
+  const form = useForm<SignupFormValues>({
+    resolver: zodResolver(vendor ? vendorSignupSchema : buyerSignupSchema),
     defaultValues: {
       fullName: "",
-      email: "",
       phone: "",
-      ...(isVendor
-        ? { businessName: "", businessAddress: "" }
+      email: "",
+      password: "",
+      previewConsent: false,
+      ...(vendor
+        ? { businessName: "", businessLocation: "", businessAddress: "" }
         : {}),
     },
   });
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = form;
-
-  const onSubmit: SubmitHandler<
-    BuyerSignupValues | VendorSignupValues
-  > = () => {
-    // Prototype only: no account or verification request is created.
-    setSubmitted(true);
-  };
-
+  const { register, handleSubmit, getFieldState, formState } = form;
+  const fieldError = (name: Parameters<typeof getFieldState>[0]) =>
+    getFieldState(name, formState).error?.message;
   return (
-    <Card>
-      <form
-        onSubmit={handleSubmit(onSubmit)}
-        className="space-y-5"
-        noValidate
-      >
+    <form
+      onChange={() => setSubmitted(false)}
+      onSubmit={handleSubmit(() => {
+        setSubmitted(true);
+        form.resetField("password");
+      })}
+      className="mt-7"
+      noValidate
+    >
+      <p className="auth-muted mb-5 text-xs leading-relaxed">
+        Demo only · Details are validated in this form and are not sent or
+        stored. No account or OTP is created.
+      </p>
+      <div className="grid gap-4 md:grid-cols-2">
+        <AuthField
+          id="signup-full-name"
+          label="Full name"
+          placeholder="e.g. Tunde Adeyemi"
+          autoComplete="name"
+          required
+          error={fieldError("fullName")}
+          {...register("fullName")}
+        />
+        <AuthField
+          id="signup-phone"
+          label="Phone number"
+          type="tel"
+          placeholder="0801 234 5678"
+          autoComplete="tel"
+          required
+          error={fieldError("phone")}
+          {...register("phone")}
+        />
+        <AuthField
+          id="signup-email"
+          label="Email"
+          type="email"
+          placeholder="name@example.com"
+          autoComplete="email"
+          required
+          error={fieldError("email")}
+          {...register("email")}
+        />
         <div>
-          <Label htmlFor="fullName" required>Full name</Label>
-          <Input
-            id="fullName"
-            autoComplete="name"
-            placeholder="Enter your full name"
-            error={Boolean(errors.fullName)}
-            aria-invalid={Boolean(errors.fullName)}
-            aria-describedby={errors.fullName ? "fullName-error" : undefined}
-            {...register("fullName")}
-          />
-          {errors.fullName && (
-            <p id="fullName-error" role="alert" className="mt-1.5 text-sm text-error">
-              {errors.fullName.message}
-            </p>
-          )}
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <AuthField
+                id="signup-password"
+                label="Password"
+                type={showPassword ? "text" : "password"}
+                placeholder="15–128 characters"
+                autoComplete="new-password"
+                required
+                helper="15–128 characters. Unicode and spaces are allowed; not only whitespace. No null characters or invalid Unicode text."
+                error={fieldError("password")}
+                {...register("password")}
+              />
+            </div>
+            <button
+              type="button"
+              className="auth-password-toggle mt-6"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-pressed={showPassword}
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          </div>
         </div>
-
-        <div>
-          <Label htmlFor="email" required>Email address</Label>
-          <Input
-            id="email"
-            type="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            error={Boolean(errors.email)}
-            aria-invalid={Boolean(errors.email)}
-            aria-describedby={errors.email ? "email-error" : undefined}
-            {...register("email")}
-          />
-          {errors.email && (
-            <p id="email-error" role="alert" className="mt-1.5 text-sm text-error">
-              {errors.email.message}
-            </p>
-          )}
-        </div>
-
-        <div>
-          <Label htmlFor="phone" required>Phone number</Label>
-          <Input
-            id="phone"
-            type="tel"
-            autoComplete="tel"
-            placeholder="e.g. 08012345678"
-            error={Boolean(errors.phone)}
-            aria-invalid={Boolean(errors.phone)}
-            aria-describedby={errors.phone ? "phone-error" : "phone-helper"}
-            {...register("phone")}
-          />
-          {errors.phone ? (
-            <p id="phone-error" role="alert" className="mt-1.5 text-sm text-error">
-              {errors.phone.message}
-            </p>
-          ) : (
-            <p id="phone-helper" className="mt-1.5 text-sm text-muted">
-              Use a phone number you can access.
-            </p>
-          )}
-        </div>
-
-        {isVendor && (
+        {vendor && (
           <>
-            <div className="border-t border-border pt-5">
-              <h2 className="text-lg font-semibold text-text">
-                Business details
-              </h2>
-              <p className="mt-1 text-sm text-muted">
-                These details help buyers identify your shop.
-              </p>
-            </div>
-
-            <div>
-              <Label htmlFor="businessName" required>
-                Shop or business name
-              </Label>
-              <Input
-                id="businessName"
-                placeholder="Enter your business name"
-                error={Boolean(
-                  "businessName" in errors && errors.businessName,
-                )}
-                aria-invalid={Boolean(
-                  "businessName" in errors && errors.businessName,
-                )}
-                {...register("businessName" as never)}
+            <AuthField
+              id="signup-business-name"
+              label="Shop / business name"
+              placeholder="e.g. Akin Auto Parts"
+              autoComplete="organization"
+              required
+              error={fieldError("businessName")}
+              {...register("businessName")}
+            />
+            <AuthField
+              id="signup-business-location"
+              label="Shop location"
+              placeholder="Ikeja, Lagos"
+              autoComplete="address-level2"
+              required
+              error={fieldError("businessLocation")}
+              {...register("businessLocation")}
+            />
+            <div className="md:col-span-2">
+              <AuthField
+                id="signup-business-address"
+                label="Shop address"
+                placeholder="Computer Village area, Ikeja"
+                autoComplete="street-address"
+                required
+                error={fieldError("businessAddress")}
+                {...register("businessAddress")}
               />
-              {"businessName" in errors && errors.businessName && (
-                <p role="alert" className="mt-1.5 text-sm text-error">
-                  {errors.businessName.message}
-                </p>
-              )}
             </div>
-
             <div>
-              <Label htmlFor="businessAddress" required>
-                Shop address or location
-              </Label>
-              <Input
-                id="businessAddress"
-                placeholder="Enter your shop location"
-                error={Boolean(
-                  "businessAddress" in errors && errors.businessAddress,
-                )}
-                aria-invalid={Boolean(
-                  "businessAddress" in errors && errors.businessAddress,
-                )}
-                {...register("businessAddress" as never)}
-              />
-              {"businessAddress" in errors && errors.businessAddress && (
-                <p role="alert" className="mt-1.5 text-sm text-error">
-                  {errors.businessAddress.message}
-                </p>
-              )}
-              <p className="mt-1.5 text-sm text-muted">
-                You can refine your location in a later step.
-              </p>
+              <label htmlFor="identification-type" className="mb-2 block">
+                Identification type
+              </label>
+              <select
+                id="identification-type"
+                disabled
+                aria-describedby="identity-demo"
+              >
+                <option>National ID</option>
+                <option>Driver&apos;s Licence</option>
+                <option>International Passport</option>
+                <option>Voter&apos;s Card</option>
+              </select>
             </div>
-
-            <div className="rounded-lg border border-border bg-background p-4">
-              <h3 className="font-semibold text-text">
-                Identity verification
-              </h3>
-              <p className="mt-2 text-sm leading-6 text-muted">
-                Vendor registration will require government-issued ID submission.
-                Submission does not mean you are verified; verification requires
-                administrator review. While pending review, you may prepare listing
-                drafts but cannot publish until approved. Document submission and
-                verification are not implemented in this prototype.
-              </p>
-              <Badge variant="warning">Verification required</Badge>
+            <div>
+              <label htmlFor="identification-document" className="mb-2 block">
+                Identification upload
+              </label>
+              <label className="auth-upload flex min-h-12 items-center gap-3 rounded-xl px-4 opacity-65">
+                <AuthIcon name="upload" />
+                <span>Upload unavailable</span>
+                <input
+                  id="identification-document"
+                  type="file"
+                  className="sr-only"
+                  disabled
+                  aria-describedby="identity-demo"
+                />
+              </label>
             </div>
           </>
         )}
-
-        <Button type="submit" block>
-          {isVendor
-            ? "Continue vendor registration"
-            : "Continue buyer registration"}
-        </Button>
-
-        {submitted && (
-          <p role="status" className="rounded-lg border border-border bg-background p-3 text-sm text-text">
-            Validation passed. This is a prototype only; no account has
-            been created and no information has been sent to a server.
+      </div>
+      <p className="auth-helper mt-4 text-xs leading-relaxed">
+        Passwords are checked against the backend signup rules without trimming
+        or changing them. This is a demo; use a sample password, not a real one.
+      </p>
+      {vendor && (
+        <div id="identity-demo" className="auth-status mt-5">
+          <h2 className="auth-display font-extrabold">
+            Vendor verification required
+          </h2>
+          <p>
+            Government-ID upload, storage and administrator review are not
+            connected. Submitting this demo does not verify or approve a vendor.
+            Publishing will require actual approval.
           </p>
-        )}
-      </form>
-    </Card>
+        </div>
+      )}
+      <label className="auth-muted mt-5 flex cursor-pointer items-start gap-3 text-sm font-medium">
+        <input
+          type="checkbox"
+          className="mt-0.5 size-5 shrink-0"
+          aria-invalid={Boolean(fieldError("previewConsent"))}
+          aria-describedby={
+            fieldError("previewConsent")
+              ? "preview-consent-error"
+              : "preview-terms"
+          }
+          {...register("previewConsent")}
+        />
+        <span>I understand this is a demo and no account will be created.</span>
+      </label>
+      {fieldError("previewConsent") && (
+        <p
+          id="preview-consent-error"
+          role="alert"
+          className="mt-2 text-sm text-red-700"
+        >
+          {fieldError("previewConsent")}
+        </p>
+      )}
+      <p id="preview-terms" className="auth-helper mt-2 text-xs">
+        Terms and Privacy Policy pages are not available yet.
+      </p>
+      <Button type="submit" block className="auth-button mt-6">
+        Preview {role} registration
+      </Button>
+      {submitted && (
+        <section role="status" className="auth-status mt-5">
+          <h2 className="auth-display font-extrabold">
+            Registration preview completed
+          </h2>
+          <p>
+            No account was created and no data was sent.{" "}
+            {vendor
+              ? "Identity review remains required; you are not verified or approved."
+              : "No verification code was sent."}
+          </p>
+          <button
+            type="button"
+            className="auth-green mt-3 text-sm font-bold underline"
+            onClick={() => setSubmitted(false)}
+          >
+            Continue editing
+          </button>
+        </section>
+      )}
+    </form>
   );
 }

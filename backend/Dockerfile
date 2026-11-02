@@ -1,5 +1,5 @@
 # 1. Use Python 3.13 as our base environment
-FROM python:3.13-slim
+FROM python:3.13-slim AS base
 
 # 2. Copy the uv executable from its official image
 COPY --from=ghcr.io/astral-sh/uv:0.12.0 /uv /uvx /bin/
@@ -32,5 +32,13 @@ USER scrapmart
 # 10. Document the application's port
 EXPOSE 8000
 
+# Separate operator-only artifact. Never run migrations in API startup.
+FROM base AS maintenance
+COPY --chown=scrapmart:scrapmart alembic.ini ./
+COPY --chown=scrapmart:scrapmart alembic ./alembic
+ENTRYPOINT ["/app/.venv/bin/python", "-B", "-m", "app.operations.staging"]
+
+# Keep the final/default target as the API image.
+FROM base AS api
 # 11. Start FastAPI using Uvicorn
-CMD ["/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-proxy-headers"]

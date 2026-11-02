@@ -1,9 +1,8 @@
-
 "use client";
 
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
-import { SiteHeader } from "@/components/layout/site-header";
+
 import { saveVendorDemoListing } from "@/lib/data/vendor-listings";
 import {
   deleteVendorDemoPhoto,
@@ -86,6 +85,19 @@ export default function NewVendorListingPage() {
       return;
     }
 
+    if (
+      title.length < 3 ||
+      description.length < 10 ||
+      location.length < 2 ||
+      !category ||
+      !condition
+    ) {
+      setErrorMessage(
+        "Complete the item name, category, description, condition and location using meaningful text.",
+      );
+      return;
+    }
+
     if (!Number.isFinite(price) || price <= 0) {
       setErrorMessage("Please enter a valid price greater than zero.");
       return;
@@ -127,13 +139,19 @@ export default function NewVendorListingPage() {
       setSubmitted(true);
     } catch {
       if (metadataCommitted) {
-        setErrorMessage("The demo listing was saved, but the view could not update. Please check your dashboard.");
+        setErrorMessage(
+          "The demo listing was saved, but the view could not update. Please check your dashboard.",
+        );
       } else if (photoCommitted) {
         try {
           await deleteVendorDemoPhoto(listingId);
-          setErrorMessage("The listing could not be saved. Its photo was cleaned up. Please try again.");
+          setErrorMessage(
+            "The listing could not be saved. Its photo was cleaned up. Please try again.",
+          );
         } catch {
-          setErrorMessage("The listing could not be saved, and its photo could not be cleaned up. A photo may remain in browser storage.");
+          setErrorMessage(
+            "The listing could not be saved, and its photo could not be cleaned up. A photo may remain in browser storage.",
+          );
         }
       } else {
         setErrorMessage(
@@ -149,9 +167,7 @@ export default function NewVendorListingPage() {
 
   return (
     <>
-      <SiteHeader />
-
-      <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+      <div className="vendor-add rounded-3xl bg-white p-6 shadow-sm md:p-8">
         <Link
           href="/vendor/dashboard"
           className="text-sm font-medium text-primary hover:underline"
@@ -162,7 +178,7 @@ export default function NewVendorListingPage() {
         <div className="mt-5">
           <p className="text-sm font-medium text-primary">VENDOR WORKSPACE</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-text">
-            Create a scrap listing
+            Sell scrap
           </h1>
           <p className="mt-2 leading-6 text-muted">
             Give buyers the information they need to understand your material
@@ -182,9 +198,9 @@ export default function NewVendorListingPage() {
               Demo listing saved
             </h2>
             <p className="mt-2 leading-6 text-muted">
-              Your listing has been saved in this browser for demonstration.
-              It has not been uploaded to the ScrapMart backend or published
-              to the public marketplace.
+              Your listing has been saved in this browser for demonstration. It
+              has not been uploaded to the ScrapMart backend or published to the
+              public marketplace.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <button
@@ -209,201 +225,7 @@ export default function NewVendorListingPage() {
             </div>
           </section>
         ) : (
-          <form
-            onSubmit={handleSubmit}
-            className="mt-8 space-y-6 rounded-xl border border-border bg-surface p-5 sm:p-7"
-          >
-            <div>
-              <label
-                htmlFor="vendorName"
-                className="mb-2 block text-sm font-semibold text-text"
-              >
-                Shop / vendor name *
-              </label>
-              <input
-                id="vendorName"
-                name="vendorName"
-                required
-                minLength={2}
-                maxLength={100}
-                placeholder="e.g. Lagos Metal Hub"
-                className="w-full rounded-md border border-border bg-background px-3 py-3 text-text outline-none focus:ring-2 focus:ring-primary"
-              />
-              <p className="mt-1 text-xs text-muted">
-                Enter the name buyers should see on this listing.
-              </p>
-            </div>
-
-            <div>
-              <label
-                htmlFor="title"
-                className="mb-2 block text-sm font-semibold text-text"
-              >
-                Listing title *
-              </label>
-              <input
-                id="title"
-                name="title"
-                required
-                minLength={3}
-                maxLength={100}
-                placeholder="e.g. Clean aluminium scrap"
-                className="w-full rounded-md border border-border bg-background px-3 py-3 text-text outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-
-            <div className="grid gap-5 sm:grid-cols-2">
-              <div>
-                <label
-                  htmlFor="category"
-                  className="mb-2 block text-sm font-semibold text-text"
-                >
-                  Category *
-                </label>
-                <select
-                  id="category"
-                  name="category"
-                  required
-                  defaultValue=""
-                  className="w-full rounded-md border border-border bg-background px-3 py-3 text-text outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="" disabled>
-                    Select a category
-                  </option>
-                  <option value="Metals">Metals</option>
-                  <option value="Plastics">Plastics</option>
-                  <option value="Paper">Paper and cardboard</option>
-                  <option value="Electronics">Electronics</option>
-                  <option value="Glass">Glass</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="condition"
-                  className="mb-2 block text-sm font-semibold text-text"
-                >
-                  Condition *
-                </label>
-                <select
-                  id="condition"
-                  name="condition"
-                  required
-                  defaultValue=""
-                  className="w-full rounded-md border border-border bg-background px-3 py-3 text-text outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="" disabled>
-                    Select condition
-                  </option>
-                  <option value="Good">Good</option>
-                  <option value="Used">Used</option>
-                  <option value="Mixed">Mixed</option>
-                  <option value="Faulty">Faulty</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label
-                htmlFor="description"
-                className="mb-2 block text-sm font-semibold text-text"
-              >
-                Description *
-              </label>
-              <textarea
-                id="description"
-                name="description"
-                required
-                minLength={10}
-                maxLength={2000}
-                rows={4}
-                placeholder="Describe the material, quality, and any important details."
-                className="w-full rounded-md border border-border bg-background px-3 py-3 text-text outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-
-            <div className="grid gap-5 sm:grid-cols-2">
-              <div>
-                <label
-                  htmlFor="price"
-                  className="mb-2 block text-sm font-semibold text-text"
-                >
-                  Price in naira (₦) *
-                </label>
-                <input
-                  id="price"
-                  name="price"
-                  type="number"
-                  required
-                  min="0.01"
-                  step="0.01"
-                  placeholder="3200"
-                  className="w-full rounded-md border border-border bg-background px-3 py-3 text-text outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="unit"
-                  className="mb-2 block text-sm font-semibold text-text"
-                >
-                  Price unit *
-                </label>
-                <select
-                  id="unit"
-                  name="unit"
-                  required
-                  defaultValue="kg"
-                  className="w-full rounded-md border border-border bg-background px-3 py-3 text-text outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="kg">Per kilogram (kg)</option>
-                  <option value="tonne">Per tonne</option>
-                  <option value="piece">Per piece</option>
-                  <option value="bundle">Per bundle</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid gap-5 sm:grid-cols-2">
-              <div>
-                <label
-                  htmlFor="quantity"
-                  className="mb-2 block text-sm font-semibold text-text"
-                >
-                  Available quantity *
-                </label>
-                <input
-                  id="quantity"
-                  name="quantity"
-                  type="number"
-                  required
-                  min="0.01"
-                  step="any"
-                  placeholder="e.g. 250"
-                  className="w-full rounded-md border border-border bg-background px-3 py-3 text-text outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="location"
-                  className="mb-2 block text-sm font-semibold text-text"
-                >
-                  Shop location *
-                </label>
-                <input
-                  id="location"
-                  name="location"
-                  required
-                  minLength={2}
-                  maxLength={150}
-                  placeholder="e.g. Ikeja, Lagos"
-                  className="w-full rounded-md border border-border bg-background px-3 py-3 text-text outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-            </div>
-
+          <form onSubmit={handleSubmit} className="mt-7 space-y-5">
             <div>
               <label
                 htmlFor="photo"
@@ -439,6 +261,196 @@ export default function NewVendorListingPage() {
                   : "Choose an image up to 5 MB. The image is stored in this browser for the prototype."}
               </p>
             </div>
+            <div>
+              <label
+                htmlFor="title"
+                className="mb-2 block text-sm font-semibold text-text"
+              >
+                Item name *
+              </label>
+              <input
+                id="title"
+                name="title"
+                required
+                minLength={3}
+                maxLength={100}
+                placeholder="e.g. Clean aluminium scrap"
+                className="w-full rounded-md border border-border bg-background px-3 py-3 text-text outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="category"
+                  className="mb-2 block text-sm font-semibold text-text"
+                >
+                  Category *
+                </label>
+                <select
+                  id="category"
+                  name="category"
+                  required
+                  defaultValue=""
+                  className="w-full rounded-md border border-border bg-background px-3 py-3 text-text outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="" disabled>
+                    Select a category
+                  </option>
+                  <option value="Car Parts">Car Parts</option>
+                  <option value="Scrap Metal">Scrap Metal</option>
+                  <option value="Copper">Copper</option>
+                  <option value="Machinery">Machinery</option>
+                  <option value="Clothes">Clothes</option>
+                  <option value="Metals">Metals</option>
+                  <option value="Plastics">Plastics</option>
+                  <option value="Paper">Paper and cardboard</option>
+                  <option value="Electronics">Electronics</option>
+                  <option value="Glass">Glass</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label
+                  htmlFor="price"
+                  className="mb-2 block text-sm font-semibold text-text"
+                >
+                  Price in naira (₦) *
+                </label>
+                <input
+                  id="price"
+                  name="price"
+                  type="number"
+                  required
+                  min="0.01"
+                  step="0.01"
+                  placeholder="3200"
+                  className="w-full rounded-md border border-border bg-background px-3 py-3 text-text outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+            </div>
+            <div>
+              <label
+                htmlFor="description"
+                className="mb-2 block text-sm font-semibold text-text"
+              >
+                Description *
+              </label>
+              <textarea
+                id="description"
+                name="description"
+                required
+                minLength={10}
+                maxLength={2000}
+                rows={4}
+                placeholder="Describe the material, quality, and any important details."
+                className="w-full rounded-md border border-border bg-background px-3 py-3 text-text outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="condition"
+                  className="mb-2 block text-sm font-semibold text-text"
+                >
+                  Condition *
+                </label>
+                <select
+                  id="condition"
+                  name="condition"
+                  required
+                  defaultValue=""
+                  className="w-full rounded-md border border-border bg-background px-3 py-3 text-text outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="" disabled>
+                    Select condition
+                  </option>
+                  <option value="Good condition">Good condition</option>
+                  <option value="Damaged">Damaged</option>
+                  <option value="For parts">For parts</option>
+                  <option value="Good">Good</option>
+                  <option value="Used">Used</option>
+                  <option value="Mixed">Mixed</option>
+                  <option value="Faulty">Faulty</option>
+                </select>
+              </div>
+              <div>
+                <label
+                  htmlFor="quantity"
+                  className="mb-2 block text-sm font-semibold text-text"
+                >
+                  Available quantity *
+                </label>
+                <input
+                  id="quantity"
+                  name="quantity"
+                  type="number"
+                  required
+                  min="0.01"
+                  step="any"
+                  placeholder="e.g. 250"
+                  className="w-full rounded-md border border-border bg-background px-3 py-3 text-text outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+            </div>
+            <div>
+              <label
+                htmlFor="location"
+                className="mb-2 block text-sm font-semibold text-text"
+              >
+                Shop location *
+              </label>
+              <input
+                id="location"
+                name="location"
+                required
+                minLength={2}
+                maxLength={150}
+                placeholder="e.g. Ikeja, Lagos"
+                className="w-full rounded-md border border-border bg-background px-3 py-3 text-text outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="vendorName"
+                  className="mb-2 block text-sm font-semibold text-text"
+                >
+                  Shop / vendor name *
+                </label>
+                <input
+                  id="vendorName"
+                  name="vendorName"
+                  required
+                  minLength={2}
+                  maxLength={100}
+                  placeholder="e.g. Lagos Metal Hub"
+                  className="w-full rounded-md border border-border bg-background px-3 py-3 text-text outline-none focus:ring-2 focus:ring-primary"
+                />
+                <p className="mt-1 text-xs text-muted">
+                  Enter the name buyers should see on this listing.
+                </p>
+              </div>
+              <div>
+                <label
+                  htmlFor="unit"
+                  className="mb-2 block text-sm font-semibold text-text"
+                >
+                  Price unit *
+                </label>
+                <select
+                  id="unit"
+                  name="unit"
+                  required
+                  defaultValue="kg"
+                  className="w-full rounded-md border border-border bg-background px-3 py-3 text-text outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="kg">Per kilogram (kg)</option>
+                  <option value="tonne">Per tonne</option>
+                  <option value="piece">Per piece</option>
+                  <option value="bundle">Per bundle</option>
+                </select>
+              </div>
+            </div>
 
             {errorMessage && (
               <p
@@ -458,8 +470,8 @@ export default function NewVendorListingPage() {
             </div>
 
             <p className="text-xs leading-5 text-muted">
-              * Required fields. Listings are saved only in this browser
-              until backend integration is implemented.
+              * Required fields. Listings are saved only in this browser until
+              backend integration is implemented.
             </p>
 
             <button
@@ -471,7 +483,7 @@ export default function NewVendorListingPage() {
             </button>
           </form>
         )}
-      </main>
+      </div>
     </>
   );
 }

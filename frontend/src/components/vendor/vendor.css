@@ -1,0 +1,154 @@
+/* Approved AppHeader/PageShell/BuyerHome/SearchPage/ProductDetail tokens. */
+.sm-vendor {
+  --vendor-brand: #08783e;
+  --vendor-dark: #064829;
+  --vendor-light: #74d99b;
+  --vendor-soft: #e8f7ee;
+  --vendor-ink: #14211a;
+  --vendor-muted: #627067;
+  --vendor-line: #dfe6e1;
+  background: #f5f7f5;
+  color: var(--vendor-ink);
+  min-height: 100vh;
+  min-width: 320px;
+  font-family: var(--font-vendor-dm), sans-serif;
+}
+.sm-vendor .vendor-display,
+.sm-vendor h1,
+.sm-vendor h2,
+.sm-vendor h3 {
+  font-family: var(--font-vendor-manrope), sans-serif;
+}
+.sm-vendor .vendor-title {
+  font-size: clamp(1.5rem, 2.5vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+}
+.sm-vendor .vendor-eyebrow {
+  color: var(--vendor-brand);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.sm-vendor .vendor-muted {
+  color: var(--vendor-muted);
+}
+.sm-vendor .vendor-green {
+  color: var(--vendor-brand);
+}
+.sm-vendor .vendor-soft {
+  background: var(--vendor-soft);
+}
+.sm-vendor .vendor-dark {
+  background: var(--vendor-dark);
+}
+.sm-vendor .vendor-card {
+  border: 1px solid var(--vendor-line);
+  background: white;
+  border-radius: 1rem;
+  box-shadow: 0 8px 30px rgb(16 42 28/0.07);
+}
+.sm-vendor .vendor-button {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  background: var(--vendor-brand);
+  color: white;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  transition: background-color 0.2s;
+}
+.sm-vendor .vendor-button:hover {
+  background: var(--vendor-dark);
+}
+.sm-vendor .vendor-ghost {
+  background: white;
+  color: var(--vendor-ink);
+  border: 1px solid var(--vendor-line);
+}
+.sm-vendor .vendor-ghost:hover {
+  background: var(--vendor-soft);
+}
+.sm-vendor .vendor-nav-link {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 1rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--vendor-muted);
+}
+.sm-vendor .vendor-nav-link:hover {
+  background: var(--vendor-soft);
+  color: var(--vendor-dark);
+}
+.sm-vendor .vendor-nav-link[aria-current="page"] {
+  background: linear-gradient(
+    to right,
+    var(--vendor-brand),
+    var(--vendor-dark)
+  );
+  color: white;
+  box-shadow: 0 8px 20px rgb(8 120 62/0.2);
+}
+.sm-vendor input:not([type="checkbox"]),
+.sm-vendor select,
+.sm-vendor textarea {
+  min-height: 2.75rem;
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid var(--vendor-line);
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  background: white;
+  color: var(--vendor-ink);
+  font-size: 1rem;
+}
+.sm-vendor input[type="checkbox"] {
+  accent-color: var(--vendor-brand);
+}
+.sm-vendor :is(a, button, input, select, textarea, summary):focus-visible {
+  outline: 3px solid var(--vendor-light);
+  outline-offset: 3px;
+}
+.sm-vendor button {
+  cursor: pointer;
+}
+.sm-vendor [id] {
+  scroll-margin-top: 6rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sm-vendor * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+.sm-vendor .vendor-add {
+  max-width: 48rem;
+  margin: auto;
+}
+.sm-vendor .vendor-add form > div:has(#photo) {
+  border: 2px dashed #08783e4d;
+  background: #e8f7ee;
+  border-radius: 1rem;
+  padding: 1.5rem;
+}
+.sm-vendor .vendor-add input[type="file"] {
+  max-width: 100%;
+}
+
+.sm-vendor .vendor-add button[type="submit"] {
+  background: var(--vendor-brand);
+  border-radius: 0.75rem;
+}
+.sm-vendor .vendor-add button[type="submit"]:hover {
+  background: var(--vendor-dark);
+}

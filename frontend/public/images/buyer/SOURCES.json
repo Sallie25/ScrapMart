@@ -1,0 +1,107 @@
+{
+  "source": "Approved App.tsx images and categories constants",
+  "assets": {
+    "engine": {
+      "url": "https://images.unsplash.com/photo-1527383418406-f85a3b146499?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=85&w=1200",
+      "path": "/images/buyer/engine.jpg"
+    },
+    "engine2": {
+      "url": "https://images.unsplash.com/photo-1429772011165-0c2e054367b8?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=85&w=1200",
+      "path": "/images/buyer/engine2.jpg"
+    },
+    "wires": {
+      "url": "https://images.unsplash.com/photo-1640602344715-a6ef5c281037?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=85&w=1200",
+      "path": "/images/buyer/wires.jpg"
+    },
+    "parts": {
+      "url": "https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=85&w=1200",
+      "path": "/images/buyer/parts.jpg"
+    },
+    "metal": {
+      "url": "https://images.unsplash.com/photo-1687612177175-81f81bab519a?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=85&w=1200",
+      "path": "/images/buyer/metal.jpg"
+    },
+    "mechanic": {
+      "url": "https://images.unsplash.com/photo-1615906655593-ad0386982a0f?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=85&w=1200",
+      "path": "/images/buyer/mechanic.jpg"
+    },
+    "clothes": {
+      "url": "https://images.unsplash.com/photo-1624192647570-1131acc12ccf?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=85&w=1200",
+      "path": "/images/buyer/clothes.jpg"
+    },
+    "category-scrap-metal": {
+      "url": "https://images.unsplash.com/photo-1687612177175-81f81bab519a?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=80&w=400",
+      "path": "/images/buyer/category-scrap-metal.jpg"
+    },
+    "category-aluminium": {
+      "url": "https://images.unsplash.com/photo-1722695510527-cc033e43be1b?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=80&w=400",
+      "path": "/images/buyer/category-aluminium.jpg"
+    },
+    "category-iron": {
+      "url": "https://images.unsplash.com/photo-1638983851342-63e1aa939a7a?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=80&w=400",
+      "path": "/images/buyer/category-iron.jpg"
+    },
+    "category-electronics": {
+      "url": "https://images.unsplash.com/photo-1608224873587-81ee37394b4e?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=80&w=400",
+      "path": "/images/buyer/category-electronics.jpg"
+    },
+    "category-machinery": {
+      "url": "https://images.unsplash.com/photo-1606337321936-02d1b1a4d5ef?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=80&w=400",
+      "path": "/images/buyer/category-machinery.jpg"
+    },
+    "category-batteries": {
+      "url": "https://images.unsplash.com/photo-1642801069630-bbb4d78061be?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=80&w=400",
+      "path": "/images/buyer/category-batteries.jpg"
+    },
+    "category-plastics": {
+      "url": "https://images.unsplash.com/photo-1613223968777-9a59c6f8c4de?crop=entropy&cs=tinysrgb&fit=crop&fm=jpg&q=80&w=400",
+      "path": "/images/buyer/category-plastics.jpg"
+    }
+  },
+  "categories": [
+    {
+      "label": "Clothes",
+      "image": "/images/buyer/clothes.jpg"
+    },
+    {
+      "label": "Scrap Metal",
+      "image": "/images/buyer/category-scrap-metal.jpg"
+    },
+    {
+      "label": "Aluminium",
+      "image": "/images/buyer/category-aluminium.jpg"
+    },
+    {
+      "label": "Copper",
+      "image": "/images/buyer/wires.jpg"
+    },
+    {
+      "label": "Iron",
+      "image": "/images/buyer/category-iron.jpg"
+    },
+    {
+      "label": "Electronics",
+      "image": "/images/buyer/category-electronics.jpg"
+    },
+    {
+      "label": "Car Parts",
+      "image": "/images/buyer/engine.jpg"
+    },
+    {
+      "label": "Machinery",
+      "image": "/images/buyer/category-machinery.jpg"
+    },
+    {
+      "label": "Batteries",
+      "image": "/images/buyer/category-batteries.jpg"
+    },
+    {
+      "label": "Plastics",
+      "image": "/images/buyer/category-plastics.jpg"
+    },
+    {
+      "label": "Other",
+      "image": "/images/buyer/parts.jpg"
+    }
+  ]
+}

@@ -1,14 +1,17 @@
-
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/layout/site-header";
 import { ListingCard } from "@/components/marketplace/listing-card";
 import { Container } from "@/components/ui/container";
 import { Badge } from "@/components/ui/badge";
-import { demoListings } from "@/lib/data/listings";
+import { buyerListings } from "@/lib/data/buyer-fixtures";
 
 function makeVendorSlug(name: string) {
-  return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 type VendorProfilePageProps = {
@@ -20,7 +23,7 @@ export default async function VendorProfilePage({
 }: VendorProfilePageProps) {
   const { slug } = await params;
 
-  const vendorListings = demoListings.filter(
+  const vendorListings = buyerListings.filter(
     (listing) => makeVendorSlug(listing.vendorName) === slug,
   );
 
@@ -63,15 +66,13 @@ export default async function VendorProfilePage({
 
                 <div className="mt-2">
                   {verified ? (
-                    <Badge variant="success">Verified vendor</Badge>
+                    <Badge>Sample verification flag · not live</Badge>
                   ) : (
                     <Badge>Not verified</Badge>
                   )}
                 </div>
 
-                <p className="mt-3 text-sm text-muted">
-                  📍 {vendor.location}
-                </p>
+                <p className="mt-3 text-sm text-muted">📍 {vendor.location}</p>
 
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
                   Vendor profile and listings for buyers to explore before
@@ -111,7 +112,7 @@ export default async function VendorProfilePage({
             <div className="rounded-xl border border-border bg-white p-5">
               <p className="text-sm text-muted">Vendor status</p>
               <p className="mt-2 text-lg font-bold text-text">
-                {verified ? "Verified" : "Not verified"}
+                {verified ? "Sample flag only" : "Not verified"}
               </p>
             </div>
 

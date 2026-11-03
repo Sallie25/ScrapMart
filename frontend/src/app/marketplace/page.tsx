@@ -1,23 +1,11 @@
 import { BuyerShell } from "@/components/buyer/buyer-shell";
 import { MarketplaceDiscovery } from "@/components/buyer/marketplace-discovery";
-import { buyerListings } from "@/lib/data/buyer-fixtures";
-export default async function MarketplacePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ category?: string; q?: string }>;
-}) {
-  const { category, q } = await searchParams;
-  const initialCategory =
-    buyerListings.find(
-      (l) => l.category.toLowerCase() === (category ?? "").trim().toLowerCase(),
-    )?.category ?? "All";
-  return (
-    <BuyerShell variant="public">
-      <MarketplaceDiscovery
-        key={`${category ?? ""}:${q ?? ""}`}
-        initialCategory={initialCategory}
-        initialQuery={q ?? ""}
-      />
-    </BuyerShell>
-  );
+import type { SearchParameters } from "@/lib/marketplace/query";
+import { marketplaceClient } from "@/lib/server/marketplace/client";
+import { loadMarketplace } from "@/lib/server/marketplace/page-data";
+
+export default async function MarketplacePage({ searchParams }: { searchParams: Promise<SearchParameters> }) {
+  const raw = await searchParams;
+  const view = await loadMarketplace(raw, marketplaceClient);
+  return <BuyerShell variant="public" publicNotice="Live catalogue · Listings and vendor verification come from the marketplace API."><MarketplaceDiscovery key={JSON.stringify(raw)} {...view} /></BuyerShell>;
 }

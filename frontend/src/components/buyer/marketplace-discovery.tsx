@@ -1,369 +1,81 @@
 "use client";
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, useTransition, type FormEvent, type ReactNode } from "react";
+import Image from "next/image";
 import Link from "next/link";
-import { buyerListings } from "@/lib/data/buyer-fixtures";
-import { BuyerListingCard } from "./buyer-listing-card";
+import { useRouter } from "next/navigation";
 import { BuyerIcon } from "./buyer-icon";
-import { legacyPhotos } from "@/lib/marketplace/legacy-photos";
-import { getVendorDemoPhoto } from "@/lib/data/vendor-listing-photos";
-const allListings = buyerListings;
-const categories = Array.from(
-  new Set(allListings.map((l) => l.category)),
-).sort();
-function FilterSelect({
-  id,
-  label,
-  value,
-  onChange,
-  children,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  children: ReactNode;
+import { conditions, formatMoney, formatQuantity, priceBasis } from "@/lib/marketplace/catalogue";
+import type { MarketplaceView } from "@/lib/server/marketplace/page-data";
+import { catalogueHref, listingHref } from "@/lib/marketplace/query";
+import type { CatalogueQuery } from "@/lib/marketplace/query";
+
+function FilterSelect({ id, label, value, onChange, children }: {
+  id: string; label: string; value: string; onChange: (value: string) => void; children: ReactNode;
 }) {
-  return (
-    <label htmlFor={id} className="grid gap-2 text-sm font-bold">
-      {label}
-      <select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
-        {children}
-      </select>
-    </label>
-  );
+  return <label htmlFor={id} className="grid gap-2 text-sm font-bold">{label}<select id={id} value={value} onChange={event => onChange(event.target.value)}>{children}</select></label>;
 }
-export function MarketplaceDiscovery({
-  initialCategory = "All",
-  initialQuery = "",
-}: {
-  initialCategory?: string;
-  initialQuery?: string;
-}) {
-  const [uploadedIds, setUploadedIds] = useState<string[]>([]);
-  useEffect(() => {
-    let active = true;
-    async function inspectUploads() {
-      const ids = await Promise.all(
-        allListings.map(async (listing) => {
-          let url: string | null = null;
-          try {
-            const blob = await getVendorDemoPhoto(listing.id);
-            if (!blob) return null;
-            url = URL.createObjectURL(blob);
-            const image = new window.Image();
-            image.src = url;
-            await image.decode();
-            return listing.id;
-          } catch {
-            return null;
-          } finally {
-            if (url) URL.revokeObjectURL(url);
-          }
-        }),
-      );
-      if (active) setUploadedIds(ids.filter((id): id is string => id !== null));
+export function MarketplaceDiscovery({ categories, query, page, error }: MarketplaceView) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [search, setSearch] = useState(query.q ?? "");
+  const [location, setLocation] = useState(query.location ?? "");
+  const [minPrice, setMinPrice] = useState(query.min_price ?? "");
+  const [maxPrice, setMaxPrice] = useState(query.max_price ?? "");
+  const [inputError, setInputError] = useState("");
+  const navigate = (changes: Partial<CatalogueQuery>, resetCursor = true) => {
+    const next = { ...query, ...changes };
+    if (resetCursor) delete next.cursor;
+    startTransition(() => router.push(catalogueHref(next)));
+  };
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (minPrice && maxPrice && Number(minPrice) > Number(maxPrice)) {
+      setInputError("Minimum price cannot be greater than maximum price."); return;
     }
-    void inspectUploads();
-    return () => {
-      active = false;
-    };
-  }, []);
-  const [searchQuery, setSearchQuery] = useState(initialQuery);
-  const [verifiedOnly, setVerifiedOnly] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState(initialCategory);
-  const [selectedLocation, setSelectedLocation] = useState("All");
-  const [selectedCondition, setSelectedCondition] = useState("All");
-  const [minPrice, setMinPrice] = useState("");
-  const [maxPrice, setMaxPrice] = useState("");
-  const [sortOption, setSortOption] = useState("newest");
-
-  const locations = Array.from(
-    new Set(allListings.map((listing) => listing.location)),
-  ).sort();
-
-  const conditions = Array.from(
-    new Set(allListings.map((listing) => listing.condition)),
-  ).sort();
-
-  const filteredListings = allListings
-    .filter(
-      (listing) =>
-        Boolean(legacyPhotos[listing.id]) || uploadedIds.includes(listing.id),
-    )
-    .filter((listing) => {
-      const query = searchQuery.trim().toLowerCase();
-
-      const matchesSearch =
-        !query ||
-        [
-          listing.title,
-          listing.description,
-          listing.category,
-          listing.location,
-          listing.vendorName,
-        ].some((value) => value.toLowerCase().includes(query));
-
-      const matchesCategory =
-        selectedCategory === "All" || listing.category === selectedCategory;
-
-      const matchesLocation =
-        selectedLocation === "All" || listing.location === selectedLocation;
-
-      const matchesCondition =
-        selectedCondition === "All" || listing.condition === selectedCondition;
-
-      const matchesMinPrice =
-        minPrice === "" || listing.price >= Number(minPrice);
-
-      const matchesMaxPrice =
-        maxPrice === "" || listing.price <= Number(maxPrice);
-
-      return (
-        matchesSearch &&
-        matchesCategory &&
-        matchesLocation &&
-        matchesCondition &&
-        matchesMinPrice &&
-        matchesMaxPrice &&
-        (!verifiedOnly || listing.verifiedVendor)
-      );
-    })
-    .sort((a, b) => {
-      if (sortOption === "price-low") {
-        return a.price - b.price;
-      }
-
-      if (sortOption === "price-high") {
-        return b.price - a.price;
-      }
-
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
-
-  function clearFilters() {
-    setSearchQuery("");
-    setSelectedCategory("All");
-    setSelectedLocation("All");
-    setSelectedCondition("All");
-    setMinPrice("");
-    setMaxPrice("");
-    setSortOption("newest");
-    setVerifiedOnly(false);
-  }
-
-  return (
-    <>
-      <Link
-        href="/"
-        className="buyer-muted mb-5 inline-flex min-h-11 items-center gap-2 text-sm font-bold"
-      >
-        <BuyerIcon name="arrow" />
-        Back to home
-      </Link>
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <p className="buyer-eyebrow">Marketplace</p>
-          <h1 className="buyer-title">Find scrap</h1>
-        </div>
-        <p className="buyer-muted text-sm font-bold">
-          {filteredListings.length} sample items
-        </p>
-      </div>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          document.getElementById("marketplace-results")?.focus();
-        }}
-        className="mt-5 flex flex-wrap gap-2 rounded-2xl border border-[#dfe6e1] bg-white p-2 shadow-sm"
-      >
-        <label htmlFor="listing-search" className="sr-only">
-          Search scrap materials
-        </label>
-        <span className="buyer-muted grid size-11 place-items-center">
-          <BuyerIcon name="search" />
-        </span>
-        <input
-          id="listing-search"
-          type="search"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Try engine or copper"
-          className="min-w-0 flex-1 font-semibold"
-        />
-        <button type="submit" className="buyer-button max-sm:w-full">
-          Search
-        </button>
-      </form>
-      <div className="mt-6 grid gap-6 lg:grid-cols-[16rem_1fr]">
-        <aside className="buyer-card h-fit p-5">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-extrabold">Filters</h2>
-            <BuyerIcon name="filter" />
-          </div>
-          <div className="mt-5 grid gap-5">
-            <FilterSelect
-              id="listing-category"
-              label="Category"
-              value={selectedCategory}
-              onChange={setSelectedCategory}
-            >
-              <option value="All">All categories</option>
-              {categories.map((value) => (
-                <option key={value}>{value}</option>
-              ))}
-            </FilterSelect>
-            <FilterSelect
-              id="listing-location"
-              label="Location"
-              value={selectedLocation}
-              onChange={setSelectedLocation}
-            >
-              <option value="All">All locations</option>
-              {locations.map((value) => (
-                <option key={value}>{value}</option>
-              ))}
-            </FilterSelect>
-            <FilterSelect
-              id="listing-condition"
-              label="Condition"
-              value={selectedCondition}
-              onChange={setSelectedCondition}
-            >
-              <option value="All">All conditions</option>
-              {conditions.map((value) => (
-                <option key={value}>{value}</option>
-              ))}
-            </FilterSelect>
-            <fieldset>
-              <legend className="mb-2 text-sm font-bold">
-                Price range (₦)
-              </legend>
-              <div className="grid gap-3">
-                <label
-                  className="grid gap-1 text-xs font-semibold"
-                  htmlFor="minimum-price"
-                >
-                  Minimum price
-                  <input
-                    id="minimum-price"
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={minPrice}
-                    onChange={(e) => setMinPrice(e.target.value)}
-                    placeholder="e.g. 300"
-                  />
-                </label>
-                <label
-                  className="grid gap-1 text-xs font-semibold"
-                  htmlFor="maximum-price"
-                >
-                  Maximum price
-                  <input
-                    id="maximum-price"
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={maxPrice}
-                    onChange={(e) => setMaxPrice(e.target.value)}
-                    placeholder="e.g. 5000"
-                  />
-                </label>
-              </div>
-              {minPrice !== "" &&
-                maxPrice !== "" &&
-                Number(minPrice) > Number(maxPrice) && (
-                  <p role="alert" className="mt-2 text-sm text-red-700">
-                    Minimum price cannot be greater than maximum price.
-                  </p>
-                )}
-            </fieldset>
-            <label
-              className="flex items-center justify-between gap-3 text-sm font-bold"
-              htmlFor="verified-fixtures"
-            >
-              Sample verification flag only
-              <input
-                id="verified-fixtures"
-                type="checkbox"
-                role="switch"
-                checked={verifiedOnly}
-                onChange={(e) => setVerifiedOnly(e.target.checked)}
-                className="size-5"
-              />
-            </label>
-            <p className="buyer-muted text-xs leading-relaxed">
-              Fixture flags are not real vendor verification. Category labels
-              and price sorting here apply to presentation data.
-            </p>
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="buyer-button buyer-ghost"
-            >
-              Clear filters
-            </button>
-          </div>
-        </aside>
-        <section className="min-w-0">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h2
-              id="marketplace-results"
-              tabIndex={-1}
-              className="buyer-muted text-sm font-bold"
-              aria-live="polite"
-            >
-              Showing {filteredListings.length} sample listings
-            </h2>
-            <label
-              htmlFor="listing-sort"
-              className="flex items-center gap-2 text-sm font-bold"
-            >
-              Sort by
-              <select
-                id="listing-sort"
-                value={sortOption}
-                onChange={(e) => setSortOption(e.target.value)}
-              >
-                <option value="newest">Newest first</option>
-                <option value="price-low">Price: low to high</option>
-                <option value="price-high">Price: high to low</option>
-              </select>
-            </label>
-          </div>
-          {filteredListings.length ? (
-            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-              {filteredListings.map((listing) => (
-                <BuyerListingCard
-                  key={listing.id}
-                  listing={listing}
-                  preferLegacy
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="buyer-card border-dashed p-10 text-center">
-              <BuyerIcon
-                name="search"
-                className="buyer-muted mx-auto size-10"
-              />
-              <h3 className="mt-4 text-xl font-extrabold">
-                No matching listings
-              </h3>
-              <p className="buyer-muted mt-2 text-sm">
-                Try another word or clear your filters.
-              </p>
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="buyer-button mt-5"
-              >
-                Clear filters
-              </button>
-            </div>
-          )}
-        </section>
-      </div>
-    </>
-  );
+    setInputError("");
+    navigate({ q: search.trim(), location: location.trim(), min_price: minPrice, max_price: maxPrice });
+  };
+  const clearFilters = () => { setSearch(""); setLocation(""); setMinPrice(""); setMaxPrice(""); setInputError(""); startTransition(() => router.push("/marketplace")); };
+  const count = page?.listings.length ?? 0;
+  return <>
+    <Link href="/" className="buyer-muted mb-5 inline-flex min-h-11 items-center gap-2 text-sm font-bold"><BuyerIcon name="arrow" />Back to home</Link>
+    <div className="flex items-end justify-between gap-4"><div><p className="buyer-eyebrow">Marketplace</p><h1 className="buyer-title">Find scrap</h1></div><p className="buyer-muted text-sm font-bold">{page ? `${count} listings on this page` : "Live catalogue"}</p></div>
+    <form onSubmit={submit} className="mt-5 flex flex-wrap gap-2 rounded-2xl border border-[#dfe6e1] bg-white p-2 shadow-sm">
+      <label htmlFor="listing-search" className="sr-only">Search scrap materials</label><span className="buyer-muted grid size-11 place-items-center"><BuyerIcon name="search" /></span>
+      <input id="listing-search" type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Try engine or copper" className="min-w-0 flex-1 font-semibold" />
+      <button type="submit" className="buyer-button max-sm:w-full" disabled={pending}>Search</button>
+    </form>
+    <div className="mt-6 grid gap-6 lg:grid-cols-[16rem_1fr]">
+      <aside className="buyer-card h-fit p-5"><div className="flex items-center justify-between"><h2 className="text-lg font-extrabold">Filters</h2><BuyerIcon name="filter" /></div>
+        <form onSubmit={submit} className="mt-5 grid gap-5">
+          <FilterSelect id="listing-category" label="Category" value={query.category_id ?? ""} onChange={value => navigate({ category_id: value })}>
+            <option value="">All categories</option>{categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
+          </FilterSelect>
+          <label htmlFor="listing-location" className="grid gap-2 text-sm font-bold">Location<input id="listing-location" value={location} onChange={event => setLocation(event.target.value)} placeholder="Town, LGA or area" maxLength={100} /></label>
+          <FilterSelect id="listing-condition" label="Condition" value={query.condition ?? ""} onChange={value => navigate({ condition: value as CatalogueQuery["condition"] })}>
+            <option value="">All conditions</option>{Object.entries(conditions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </FilterSelect>
+          <fieldset><legend className="mb-2 text-sm font-bold">Price range (₦)</legend><div className="grid gap-3">
+            <label htmlFor="minimum-price" className="grid gap-1 text-xs font-semibold">Minimum price<input id="minimum-price" type="number" min="0" max="999999999999.99" step="0.01" value={minPrice} onChange={event => setMinPrice(event.target.value)} placeholder="e.g. 300" /></label>
+            <label htmlFor="maximum-price" className="grid gap-1 text-xs font-semibold">Maximum price<input id="maximum-price" type="number" min="0" max="999999999999.99" step="0.01" value={maxPrice} onChange={event => setMaxPrice(event.target.value)} placeholder="e.g. 5000" /></label>
+          </div></fieldset>
+          {inputError && <p role="alert" className="text-sm text-red-700">{inputError}</p>}
+          <button type="submit" className="buyer-button" disabled={pending}>Apply filters</button>
+          <button type="button" onClick={clearFilters} className="buyer-button buyer-ghost">Clear filters</button>
+        </form>
+      </aside>
+      <section className="min-w-0" aria-busy={pending}>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 id="marketplace-results" tabIndex={-1} className="buyer-muted text-sm font-bold" aria-live="polite">{pending ? "Loading listings…" : page ? `Showing ${count} live listings` : "Marketplace listings"}</h2><span className="buyer-muted text-sm font-bold">Newest first</span></div>
+        {error ? <div role="alert" className="buyer-card border-dashed p-10 text-center"><h3 className="text-xl font-extrabold">{error === "filters" ? "Check your filters" : "Marketplace is unavailable"}</h3><p className="buyer-muted mt-2 text-sm">{error === "filters" ? "Use a valid category, price range and recent-first ordering." : "We could not load live listings. Please try again."}</p><button type="button" onClick={() => router.refresh()} className="buyer-button mt-5">Retry</button>{error === "filters" && <Link href="/marketplace" className="buyer-button buyer-ghost ml-2">Clear filters</Link>}</div>
+        : page && count ? <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{page.listings.map(listing => <article key={listing.id} data-listing-id={listing.id} className="buyer-card group overflow-hidden transition hover:-translate-y-0.5 hover:shadow-lg">
+          <Link href={listingHref(listing.id, query)} aria-label={`View ${listing.title}`} className="block overflow-hidden"><Image unoptimized src={listing.photos[0].url} alt={listing.title} width={listing.photos[0].width ?? 800} height={listing.photos[0].height ?? 600} className="aspect-[4/3] w-full object-cover" /></Link>
+          <div className="grid gap-3 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${listing.condition === "faulty" ? "bg-orange-50 text-orange-800" : "bg-emerald-50 text-emerald-800"}`}>{conditions[listing.condition]}</span><time dateTime={listing.published_at} className="buyer-muted text-xs font-semibold">{new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(listing.published_at))}</time></div>
+            <div><h3 className="truncate text-base font-extrabold">{listing.title}</h3><p className="mt-1 text-xl font-extrabold tracking-tight text-[#064829]">{formatMoney(listing.price)}<span className="buyer-muted ml-1 text-xs font-medium">{priceBasis(listing)}</span></p></div>
+            <p className="buyer-muted flex items-center gap-1 text-xs font-semibold"><BuyerIcon name="pin" className="size-4" />{listing.location_summary}</p><p className="buyer-muted text-xs font-semibold">{listing.vendor.business_name} · Verified vendor</p><p className="buyer-muted text-xs font-semibold">{formatQuantity(listing.available_quantity)} available</p>
+            <Link href={listingHref(listing.id, query)} className="buyer-button w-full">View item</Link></div></article>)}</div>
+        : page ? <div className="buyer-card border-dashed p-10 text-center"><BuyerIcon name="search" className="buyer-muted mx-auto size-10" /><h3 className="mt-4 text-xl font-extrabold">{page.next_cursor ? "No listings on this page" : "No matching listings"}</h3><p className="buyer-muted mt-2 text-sm">{page.next_cursor ? "More listings may appear on the next page." : "Try another word or clear your filters."}</p><Link href="/marketplace" className="buyer-button mt-5">Clear filters</Link></div> : null}
+        {page?.next_cursor && <nav aria-label="Marketplace pages" className="mt-6 flex justify-center"><Link className="buyer-button" href={catalogueHref({ ...query, cursor: page.next_cursor })}>Next page</Link></nav>}
+      </section>
+    </div>
+  </>;
 }

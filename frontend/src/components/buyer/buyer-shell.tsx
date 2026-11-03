@@ -19,10 +19,12 @@ export function BuyerShell({
   children,
   view,
   variant = "workspace",
+  publicNotice,
 }: {
   children: ReactNode;
   view?: string;
   variant?: "workspace" | "public";
+  publicNotice?: string;
 }) {
   return (
     <div className={`${dmSans.variable} ${manrope.variable} sm-buyer`}>
@@ -35,7 +37,7 @@ export function BuyerShell({
         <main className="mx-auto min-h-[calc(100vh-5rem)] max-w-screen-2xl px-4 pb-10 pt-5 lg:px-7 lg:pt-6">
           <div className="mb-5 rounded-xl border border-[#dfe6e1] bg-white px-4 py-3 text-xs leading-relaxed text-[#627067]">
             {variant === "public"
-              ? "Presentation preview · Sample listings; live availability and vendor verification are not confirmed."
+              ? publicNotice ?? "Presentation preview · Sample listings; live availability and vendor verification are not confirmed."
               : "Presentation preview · Sample listings and profile; no authenticated session, live orders, messages or verified vendor claims."}
           </div>
           {children}

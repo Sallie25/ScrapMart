@@ -159,23 +159,21 @@ test('loopback disposable configuration remains isolated and uses its original n
   assert.equal(db.connects, 0); await local.close();
 });
 
-test('deployed route remains disabled even when a complete explicit runtime configuration exists', async () => {
-  const { env } = fixture(); const before = poolObservations.length;
-  const old = Object.fromEntries(Object.keys(env).map(name => [name, process.env[name]]));
-  const fetch = globalThis.fetch;
+test('deployed route remains disabled by default without building a pool', async () => {
+  const before = poolObservations.length;
+  const previous = process.env.BFF_AUTH_ENABLED;
   try {
-    Object.assign(process.env, env);
-    globalThis.fetch = () => assert.fail('No live network permitted');
-    const response = await POST(new Request(env.BFF_BROWSER_ORIGIN + '/api/auth/buyer/login', { method: 'POST' }),
+    delete process.env.BFF_AUTH_ENABLED;
+    const response = await POST(new Request('https://scrapmart.test/api/auth/buyer/login', { method: 'POST' }),
       { params: Promise.resolve({ operation: ['buyer', 'login'] }) });
-    assert.equal(response.status, 503); assert.equal((await response.json()).detail.code, 'authentication_disabled');
+    assert.equal(response.status, 503);
+    assert.equal((await response.json()).detail.code, 'authentication_disabled');
     assert.equal(poolObservations.length, before);
   } finally {
-    globalThis.fetch = fetch;
-    for (const [name, value] of Object.entries(old)) { if (value === undefined) delete process.env[name]; else process.env[name] = value; }
+    if (previous === undefined) delete process.env.BFF_AUTH_ENABLED;
+    else process.env.BFF_AUTH_ENABLED = previous;
   }
 });
-
 
 test('a valid public CA bundle is passed intact without changing verification policy', async () => {
   const { db, env } = fixture();

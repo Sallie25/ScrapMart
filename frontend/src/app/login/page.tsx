@@ -22,8 +22,7 @@ export default async function LoginPage({
             Your marketplace is ready.
           </h2>
           <p className="mt-3 text-sm leading-relaxed text-slate-300">
-            Sign in to access your saved orders, listings and messages when
-            authentication is connected.
+            {role === "buyer" ? "Sign in through ScrapMart authentication to access your Buyer account when the service is available." : "Sign in to access your saved orders, listings and messages when authentication is connected."}
           </p>
           <div className="mt-8 rounded-2xl bg-white/10 p-4">
             <p className="text-xs font-bold uppercase tracking-wider text-[#74d99b]">
@@ -45,8 +44,7 @@ export default async function LoginPage({
           <h1 className="auth-title">Welcome back</h1>
           {destination && (
             <p role="note" className="auth-status mt-4">
-              Sign-in required for this buyer action. This login is still a
-              demonstration and cannot authenticate or submit messages/orders.{" "}
+              {role === "buyer" ? "Sign-in is required for this buyer action. Contact and ordering are not yet connected." : "Sign-in required for this buyer action. This login is still a demonstration and cannot authenticate or submit messages/orders."}{" "}
               <Link href={destination} className="underline">
                 Return to item
               </Link>

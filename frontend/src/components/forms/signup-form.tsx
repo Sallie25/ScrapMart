@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { createBuyerAuthClient } from "@/lib/buyer-auth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { AuthField } from "@/components/auth/auth-field";
 import { AuthIcon } from "@/components/auth/auth-icon";
@@ -12,12 +14,18 @@ import {
   type SignupFormValues,
 } from "@/lib/validations/auth";
 
+const buyerFormSchema = buyerSignupSchema.extend({ previewConsent: z.boolean().refine(Boolean, "Confirm the registration acknowledgement") });
+
 export function SignupForm({ role }: { role: "buyer" | "vendor" }) {
   const vendor = role === "vendor";
   const [submitted, setSubmitted] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [result, setResult] = useState<{ message: string; accepted: boolean } | null>(null);
+  const inFlight = useRef(false);
+  const client = useRef(createBuyerAuthClient());
   const [showPassword, setShowPassword] = useState(false);
   const form = useForm<SignupFormValues>({
-    resolver: zodResolver(vendor ? vendorSignupSchema : buyerSignupSchema),
+    resolver: zodResolver(vendor ? vendorSignupSchema : buyerFormSchema),
     defaultValues: {
       fullName: "",
       phone: "",
@@ -30,23 +38,32 @@ export function SignupForm({ role }: { role: "buyer" | "vendor" }) {
     },
   });
   const { register, handleSubmit, getFieldState, formState } = form;
+  const submitBuyer = async (values: SignupFormValues) => {
+    if (inFlight.current) return;
+    inFlight.current = true; setPending(true); setResult(null);
+    try {
+      const outcome = await client.current.signup(values);
+      if (outcome.status === "accepted") form.resetField("password");
+      else for (const field of outcome.fields ?? []) {
+        const name = { full_name: "fullName", phone_number: "phone", email: "email", password: "password" }[field] as "fullName" | "phone" | "email" | "password" | undefined;
+        if (name) form.setError(name, { message: `Check ${name === "fullName" ? "full name" : name === "phone" ? "phone number" : name}.` });
+      }
+      setResult({ message: outcome.message, accepted: outcome.status === "accepted" });
+    } finally { inFlight.current = false; setPending(false); }
+  };
   const fieldError = (name: Parameters<typeof getFieldState>[0]) =>
     getFieldState(name, formState).error?.message;
   return (
     <form
-      onChange={() => setSubmitted(false)}
-      onSubmit={handleSubmit(() => {
-        setSubmitted(true);
-        form.resetField("password");
-      })}
+      onChange={() => { setSubmitted(false); setResult(null); }}
+      onSubmit={event => { void handleSubmit(vendor ? async () => { setSubmitted(true); form.resetField("password"); } : submitBuyer)(event); }}
       className="mt-7"
       noValidate
     >
       <p
         className={`auth-muted mb-5 text-xs leading-relaxed ${vendor ? "sr-only" : ""}`}
       >
-        Demo only · Details are validated in this form and are not sent or
-        stored. No account or OTP is created.
+        {vendor ? "Demo only · Details are validated in this form and are not sent or stored. No account or OTP is created." : "Submit your details through ScrapMart authentication. Registration may be unavailable until the service is activated."}
       </p>
       <div className="grid gap-4 md:grid-cols-2">
         <AuthField
@@ -177,7 +194,7 @@ export function SignupForm({ role }: { role: "buyer" | "vendor" }) {
         className={`auth-helper mt-4 text-xs leading-relaxed ${vendor ? "sr-only" : ""}`}
       >
         Passwords are checked against the backend signup rules without trimming
-        or changing them. This is a demo; use a sample password, not a real one.
+        or changing them. {vendor ? "This is a demo; use a sample password, not a real one." : "Your password is sent only to the same-origin authentication route."}
       </p>
       {vendor && (
         <p
@@ -208,7 +225,7 @@ export function SignupForm({ role }: { role: "buyer" | "vendor" }) {
               account will be created.
             </>
           ) : (
-            "I understand this is a demo and no account will be created."
+            "I understand registration is only confirmed by the authentication service."
           )}
         </span>
       </label>
@@ -227,9 +244,10 @@ export function SignupForm({ role }: { role: "buyer" | "vendor" }) {
       >
         Terms and Privacy Policy pages are not available yet.
       </p>
-      <Button type="submit" block className="auth-button mt-6">
-        {vendor ? "Create account (demo)" : `Preview ${role} registration`}
+      <Button type="submit" block className="auth-button mt-6" disabled={pending} loading={pending}>
+        {vendor ? "Create account (demo)" : pending ? "Submitting…" : "Create buyer account"}
       </Button>
+      {result && <section role={result.accepted ? "status" : "alert"} className="auth-status mt-5"><p>{result.message}</p></section>}
       {submitted && (
         <section role="status" className="auth-status mt-5">
           <h2 className="auth-display font-extrabold">

@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { buyerLoginDestination, createBuyerAuthClient } from "@/lib/buyer-auth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
@@ -11,24 +13,42 @@ import { loginSchema, type LoginFormValues } from "@/lib/validations/auth";
 export function LoginForm({ role = "buyer" }: { role?: "buyer" | "vendor" }) {
   const [showPassword, setShowPassword] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [result, setResult] = useState("");
+  const inFlight = useRef(false);
+  const client = useRef(createBuyerAuthClient());
+  const router = useRouter();
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
+  const submitBuyer = async (values: LoginFormValues) => {
+    if (inFlight.current) return;
+    inFlight.current = true; setPending(true); setResult("");
+    try {
+      const outcome = await client.current.login(values);
+      const destination = buyerLoginDestination(outcome);
+      if (destination) { router.replace(destination); }
+      else {
+        for (const field of outcome.fields ?? []) if (field === "email" || field === "password") setError(field, { message: `Check ${field}.` });
+        setResult(outcome.message);
+      }
+    } finally { inFlight.current = false; setPending(false); }
+  };
   return (
     <form
-      onSubmit={handleSubmit(() => setSubmitted(true))}
-      onChange={() => setSubmitted(false)}
+      onSubmit={event => { void handleSubmit(role === "buyer" ? submitBuyer : async () => { setSubmitted(true); })(event); }}
+      onChange={() => { setSubmitted(false); setResult(""); }}
       className="mt-6 grid gap-4"
       noValidate
     >
       <p className="auth-muted text-xs leading-relaxed">
-        Demo only · Use an email address to preview sign-in. No credentials are
-        sent or stored.
+        {role === "buyer" ? "Sign in through ScrapMart authentication. Availability depends on the service being activated." : "Demo only · Use an email address to preview sign-in. No credentials are sent or stored."}
       </p>
       <AuthField
         id="login-email"
@@ -71,9 +91,10 @@ export function LoginForm({ role = "buyer" }: { role?: "buyer" | "vendor" }) {
       >
         Forgot password?
       </Link>
-      <Button type="submit" block className="auth-button mt-2">
-        Log in
+      <Button type="submit" block className="auth-button mt-2" disabled={pending} loading={pending}>
+        {pending ? "Signing in…" : "Log in"}
       </Button>
+      {result && <p role="alert" className="auth-status text-red-700">{result}</p>}
       {submitted && (
         <p role="status" className="auth-status">
           Validation passed. This prototype does not authenticate users or start

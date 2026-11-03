@@ -17,7 +17,7 @@ export default async function SignupPage({
       >
         <aside className="auth-dark-panel hidden p-9 text-white lg:block">
           <span className="auth-step-badge inline-flex rounded-full px-3 py-1 text-xs font-bold">
-            {vendor ? "Step 1 of 3" : "Registration preview"}
+            {vendor ? "Step 1 of 3" : "Buyer registration"}
           </span>
           <h2 className="auth-display mt-7 text-4xl font-extrabold">
             {vendor
@@ -34,7 +34,7 @@ export default async function SignupPage({
             <p className="mt-2 text-sm leading-relaxed text-slate-300">
               {vendor
                 ? "Identification upload and review are not connected. Do not submit identity documents in this demo."
-                : "Your details stay in this form. No account is created in this demo."}
+                : "Registration uses ScrapMart authentication when the service is available."}
             </p>
           </div>
         </aside>
@@ -44,7 +44,7 @@ export default async function SignupPage({
             Create {role} account
           </h1>
           <p className="auth-muted mt-2 text-sm">
-            Fill in the required details to preview registration.
+            {vendor ? "Fill in the required details to preview registration." : "Fill in the required details to create a Buyer account."}
           </p>
           <SignupForm key={role} role={role} />
           <p className="auth-muted mt-5 text-center text-sm">

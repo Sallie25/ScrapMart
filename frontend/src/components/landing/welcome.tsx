@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import photographs from "../../../public/images/nigerian-scrap/SOURCES.json";
+import { MaterialVisual } from "@/components/marketplace/material-visual";
 
 type Role = "buyer" | "vendor";
 
@@ -207,7 +209,6 @@ function LandingHeader() {
             >
               {[
                 ["Marketplace", "/marketplace"],
-                ["Categories", "/categories"],
                 ["How it works", "/how-it-works"],
                 ["Get started", "/onboarding"],
               ].map(([label, href]) => (
@@ -245,7 +246,6 @@ function LandingHeader() {
           >
             {[
               ["Marketplace", "/marketplace"],
-              ["Categories", "/categories"],
               ["How it works", "/how-it-works"],
               ["Get started", "/onboarding"],
               ["I already have an account", "/login"],
@@ -636,26 +636,10 @@ function OnboardingSections() {
 
 function HeroMediaSlider() {
   const slides = [
-    [
-      "/images/landing/vehicle-scrap.jpg",
-      "Used vehicles and reusable auto parts in a Nigerian vehicle yard",
-      "Vehicle scrap",
-    ],
-    [
-      "/images/landing/local-collection.jpg",
-      "A Nigerian collector moving reusable materials by cart",
-      "Local collection",
-    ],
-    [
-      "/images/landing/auto-parts.jpg",
-      "Yellow commercial vehicles in Lagos, Nigeria",
-      "Auto parts",
-    ],
-    [
-      "/images/landing/lagos-market.jpg",
-      "People trading at a busy local market in Lagos",
-      "Lagos market",
-    ],
+    "Bagged plastic bottles · Seme",
+    "Scrap collection yard · Enugu",
+    "Tyres & rubber",
+    "Cardboard",
   ];
   const [activeSlide, setActiveSlide] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -691,20 +675,41 @@ function HeroMediaSlider() {
     >
       <div className="relative h-[25rem] sm:h-[32rem] overflow-hidden rounded-[2rem] bg-[var(--landing-ink)] p-3 shadow-2xl">
         <div className="relative h-full overflow-hidden rounded-[1.4rem]">
-          {slides.map(([src, alt, label], index) => (
+          {slides.map((label, index) => (
             <div
               key={label}
               className={`absolute inset-0 transition-opacity duration-700 ${activeSlide === index ? "opacity-100" : "pointer-events-none opacity-0"}`}
               aria-hidden={activeSlide !== index}
+              inert={activeSlide !== index}
             >
-              <Image
-                src={src}
-                alt={activeSlide === index ? alt : ""}
-                fill
-                sizes="(min-width: 1024px) 46vw, 100vw"
-                preload={index === 0}
-                className="object-cover"
-              />
+              {photographs.assets[index] ? (
+                <>
+                  <Image
+                    src={photographs.assets[index].path}
+                    alt={photographs.assets[index].alt}
+                    fill
+                    sizes="(max-width: 1023px) calc(100vw - 64px), 560px"
+                    className="object-cover"
+                  />
+                  <div className="absolute left-3 right-24 top-3 rounded-xl bg-black/80 p-3 text-xs leading-relaxed text-white">
+                    <p>Context photograph · Not a seller listing</p>
+                    <a
+                      className="underline"
+                      href={photographs.assets[index].source}
+                    >
+                      {photographs.assets[index].creator} / Wikimedia Commons
+                    </a>
+                    <p>
+                      <a className="underline" href={photographs.licenseUrl}>
+                        CC BY-SA 4.0
+                      </a>
+                      {" · Resized; display cropped"}
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <MaterialVisual category={label} />
+              )}
               <span className="absolute bottom-5 left-5 rounded-full bg-white px-3 py-1.5 text-xs font-extrabold text-[var(--landing-ink)] shadow">
                 {label}
               </span>
@@ -719,7 +724,7 @@ function HeroMediaSlider() {
             {paused ? "Play" : "Pause"}
           </button>
           <div className="absolute bottom-5 right-5 flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-2 shadow">
-            {slides.map(([, , label], index) => (
+            {slides.map((label, index) => (
               <button
                 key={label}
                 onClick={() => setActiveSlide(index)}

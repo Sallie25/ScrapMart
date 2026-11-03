@@ -1,56 +1,34 @@
-import Image from "next/image";
 import Link from "next/link";
 import { ListingPhoto } from "@/components/marketplace/listing-photo";
 import type { BuyerListing } from "@/lib/data/buyer-fixtures";
 import { BuyerIcon } from "./buyer-icon";
-export function BuyerPhoto({ listing }: { listing: BuyerListing }) {
-  const illustration = (
-    {
-      Metals: "/images/category-metals.jpg",
-      Plastics: "/images/category-plastics.jpg",
-      Electronics: "/images/category-electronics.jpg",
-    } as Record<string, string>
-  )[listing.category];
+export function BuyerPhoto({
+  listing,
+  preferLegacy = false,
+}: {
+  listing: BuyerListing;
+  preferLegacy?: boolean;
+}) {
+  // Unverified fixture image paths are never used as seller photographs.
+  // The shared renderer always attempts the actual browser upload first.
   return (
-    <div className="relative aspect-[4/3] overflow-hidden rounded-[inherit] bg-[#edf2ef]">
-      {listing.image ? (
-        <Image
-          src={listing.image}
-          alt={`${listing.title} — presentation image`}
-          fill
-          sizes="(max-width:640px) 100vw, (max-width:1024px) 50vw, 30vw"
-          className="object-cover"
-        />
-      ) : (
-        <>
-          {illustration && (
-            <Image
-              src={illustration}
-              alt={`${listing.category} category illustration, not this item`}
-              fill
-              sizes="(max-width:640px) 100vw, 30vw"
-              className="object-cover"
-            />
-          )}
-          <ListingPhoto
-            listingId={listing.id}
-            category={listing.category}
-            title={listing.title}
-            className={`peer aspect-[4/3] w-full ${illustration ? "[&>div]:hidden" : ""}`}
-          />
-        </>
-      )}
-      <span className="absolute bottom-2 left-2 rounded-full bg-white/95 px-2 py-1 text-[10px] font-bold text-[#14211a] peer-has-[img]:hidden">
-        {listing.image
-          ? "Presentation image"
-          : illustration
-            ? "Category illustration"
-            : "Photo unavailable"}
-      </span>
-    </div>
+    <ListingPhoto
+      preferLegacy={preferLegacy}
+      listingId={listing.id}
+      category={listing.category}
+      title={listing.title}
+      className="aspect-[4/3] w-full rounded-[inherit]"
+    />
   );
 }
-export function BuyerListingCard({ listing }: { listing: BuyerListing }) {
+
+export function BuyerListingCard({
+  listing,
+  preferLegacy = false,
+}: {
+  listing: BuyerListing;
+  preferLegacy?: boolean;
+}) {
   const date = listing.createdAt.slice(0, 10);
   return (
     <article
@@ -62,7 +40,7 @@ export function BuyerListingCard({ listing }: { listing: BuyerListing }) {
         aria-label={`View ${listing.title}`}
         className="block overflow-hidden"
       >
-        <BuyerPhoto listing={listing} />
+        <BuyerPhoto listing={listing} preferLegacy={preferLegacy} />
       </Link>
       <div className="grid gap-3 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">

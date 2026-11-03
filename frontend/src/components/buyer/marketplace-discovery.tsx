@@ -1,9 +1,11 @@
 "use client";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { buyerListings } from "@/lib/data/buyer-fixtures";
 import { BuyerListingCard } from "./buyer-listing-card";
 import { BuyerIcon } from "./buyer-icon";
+import { legacyPhotos } from "@/lib/marketplace/legacy-photos";
+import { getVendorDemoPhoto } from "@/lib/data/vendor-listing-photos";
 const allListings = buyerListings;
 const categories = Array.from(
   new Set(allListings.map((l) => l.category)),
@@ -37,6 +39,35 @@ export function MarketplaceDiscovery({
   initialCategory?: string;
   initialQuery?: string;
 }) {
+  const [uploadedIds, setUploadedIds] = useState<string[]>([]);
+  useEffect(() => {
+    let active = true;
+    async function inspectUploads() {
+      const ids = await Promise.all(
+        allListings.map(async (listing) => {
+          let url: string | null = null;
+          try {
+            const blob = await getVendorDemoPhoto(listing.id);
+            if (!blob) return null;
+            url = URL.createObjectURL(blob);
+            const image = new window.Image();
+            image.src = url;
+            await image.decode();
+            return listing.id;
+          } catch {
+            return null;
+          } finally {
+            if (url) URL.revokeObjectURL(url);
+          }
+        }),
+      );
+      if (active) setUploadedIds(ids.filter((id): id is string => id !== null));
+    }
+    void inspectUploads();
+    return () => {
+      active = false;
+    };
+  }, []);
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
@@ -55,6 +86,10 @@ export function MarketplaceDiscovery({
   ).sort();
 
   const filteredListings = allListings
+    .filter(
+      (listing) =>
+        Boolean(legacyPhotos[listing.id]) || uploadedIds.includes(listing.id),
+    )
     .filter((listing) => {
       const query = searchQuery.trim().toLowerCase();
 
@@ -119,7 +154,7 @@ export function MarketplaceDiscovery({
   return (
     <>
       <Link
-        href="/buyer/dashboard"
+        href="/"
         className="buyer-muted mb-5 inline-flex min-h-11 items-center gap-2 text-sm font-bold"
       >
         <BuyerIcon name="arrow" />
@@ -299,7 +334,11 @@ export function MarketplaceDiscovery({
           {filteredListings.length ? (
             <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
               {filteredListings.map((listing) => (
-                <BuyerListingCard key={listing.id} listing={listing} />
+                <BuyerListingCard
+                  key={listing.id}
+                  listing={listing}
+                  preferLegacy
+                />
               ))}
             </div>
           ) : (

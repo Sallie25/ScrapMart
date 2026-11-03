@@ -12,7 +12,7 @@ export default async function MarketplacePage({
       (l) => l.category.toLowerCase() === (category ?? "").trim().toLowerCase(),
     )?.category ?? "All";
   return (
-    <BuyerShell>
+    <BuyerShell variant="public">
       <MarketplaceDiscovery
         key={`${category ?? ""}:${q ?? ""}`}
         initialCategory={initialCategory}

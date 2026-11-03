@@ -7,7 +7,7 @@ export default async function ListingDetailsPage({
 }) {
   const { id } = await params;
   return (
-    <BuyerShell>
+    <BuyerShell variant="public">
       <ListingDetails key={id} id={id} />
     </BuyerShell>
   );

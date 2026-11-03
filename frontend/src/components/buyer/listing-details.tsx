@@ -1,6 +1,5 @@
 "use client";
 import { useMemo, useState, useSyncExternalStore } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import {
   buyerListings,
@@ -9,7 +8,7 @@ import {
 } from "@/lib/data/buyer-fixtures";
 import type { ScrapListing } from "@/lib/data/listings";
 import type { VendorDemoListing } from "@/lib/data/vendor-listings";
-import { ContactVendorForm } from "@/components/marketplace/contact-vendor-form";
+import { buyerActionLogin } from "@/lib/marketplace/buyer-actions";
 import { BuyerIcon } from "./buyer-icon";
 import { BuyerPhoto } from "./buyer-listing-card";
 const STORAGE_KEY = "scrapmart-vendor-demo-listings";
@@ -78,7 +77,6 @@ function formatPrice(price: number) {
 }
 
 export function ListingDetails({ id }: { id: string }) {
-  const [activeImage, setActiveImage] = useState(0);
   const [notice, setNotice] = useState<"order" | "report" | null>(null);
   const vendorListingsSnapshot = useSyncExternalStore(
     subscribeToVendorListings,
@@ -125,14 +123,6 @@ export function ListingDetails({ id }: { id: string }) {
     );
   const item = listing as BuyerListing;
   const local = vendorListings.some((l) => l.id === item.id);
-  const gallery = item.image
-    ? [
-        item.image,
-        "/images/buyer/parts.jpg",
-        "/images/buyer/mechanic.jpg",
-        item.image,
-      ]
-    : [];
   const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.location)}`;
   return (
     <>
@@ -145,48 +135,9 @@ export function ListingDetails({ id }: { id: string }) {
       </Link>
       <div className="grid gap-7 lg:grid-cols-[1.12fr_.88fr]">
         <section className="min-w-0">
-          {gallery.length ? (
-            <>
-              <div className="relative aspect-[4/3] overflow-hidden rounded-3xl bg-slate-100">
-                <Image
-                  src={gallery[activeImage]}
-                  alt={`${item.title} presentation gallery view ${activeImage + 1}`}
-                  fill
-                  sizes="(max-width:1023px) 100vw, 50vw"
-                  className="object-cover"
-                  preload
-                />
-              </div>
-              <div className="mt-3 grid grid-cols-4 gap-3">
-                {gallery.map((src, index) => (
-                  <button
-                    type="button"
-                    key={index}
-                    aria-label={`Show sample photo ${index + 1}`}
-                    aria-pressed={activeImage === index}
-                    onClick={() => setActiveImage(index)}
-                    className={`relative aspect-square overflow-hidden rounded-xl border-2 ${activeImage === index ? "border-[#08783e]" : "border-transparent"}`}
-                  >
-                    <Image
-                      src={src}
-                      alt=""
-                      fill
-                      sizes="(max-width:1023px) 22vw, 12vw"
-                      className="object-cover"
-                    />
-                  </button>
-                ))}
-              </div>
-              <p className="buyer-muted mt-3 text-xs">
-                Presentation gallery · Sample images from the designer, not
-                evidence of an available item.
-              </p>
-            </>
-          ) : (
-            <div className="overflow-hidden rounded-3xl">
-              <BuyerPhoto listing={item} />
-            </div>
-          )}
+          <div className="overflow-hidden rounded-3xl">
+            <BuyerPhoto listing={item} preferLegacy />
+          </div>
         </section>
         <section className="min-w-0 lg:pl-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -254,18 +205,20 @@ export function ListingDetails({ id }: { id: string }) {
             </p>
           </div>
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <a href="#contact-vendor" className="buyer-button sm:col-span-2">
+            <Link
+              href={buyerActionLogin(item.id, "contact")}
+              className="buyer-button sm:col-span-2"
+            >
               <BuyerIcon name="message" />
               Contact vendor
-            </a>
-            <button
-              type="button"
-              onClick={() => setNotice("order")}
+            </Link>
+            <Link
+              href={buyerActionLogin(item.id, "order")}
               className="buyer-button buyer-ghost"
             >
               <BuyerIcon name="bag" />
               Order item
-            </button>
+            </Link>
             <a
               href={mapUrl}
               target="_blank"
@@ -320,11 +273,14 @@ export function ListingDetails({ id }: { id: string }) {
           </div>
         </section>
       </div>
-      <div id="contact-vendor" className="mt-7 max-w-3xl">
-        <ContactVendorForm
-          vendorName={item.vendorName}
-          listingTitle={item.title}
-        />
+      <div
+        id="contact-vendor"
+        className="buyer-card mt-7 max-w-3xl p-5"
+        role="note"
+      >
+        Sign-in required to contact vendors or order items. Authentication and
+        buyer actions are not connected yet. No message or order can be
+        submitted from this preview.
       </div>
     </>
   );

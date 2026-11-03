@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import Image from "next/image";
+import { ListingPhoto } from "@/components/marketplace/listing-photo";
 import { useState } from "react";
 import { designerListings } from "@/lib/data/buyer-fixtures";
 import { VendorIcon } from "./vendor-icon";
@@ -64,20 +64,21 @@ export function VendorWorkspace({ view }: { view?: string }) {
         <p className="vendor-eyebrow">Bulk upload</p>
         <h1 className="vendor-title">Add multiple items</h1>
         <p className="vendor-muted mt-2 text-sm">
-          Review sample photos and item names. Bulk publishing is unavailable.
+          Review sample illustrations and item names. Bulk publishing is
+          unavailable.
         </p>
         {!bulk ? (
           <section className="vendor-card mt-7 grid min-h-72 place-items-center border-2 border-dashed p-8 text-center">
             <div>
               <VendorIcon name="upload" className="mx-auto size-8" />
               <h2 className="vendor-display mt-5 text-xl font-extrabold">
-                Choose item photos
+                Review sample items
               </h2>
               <p className="vendor-muted my-3 text-sm">
                 Photo upload is available in the single-item form.
               </p>
               <button onClick={() => setBulk(true)} className={action}>
-                Use 3 sample photos
+                Use 3 sample illustrations
               </button>
               <Link
                 className="vendor-green mt-4 block text-sm font-bold"
@@ -106,12 +107,12 @@ export function VendorWorkspace({ view }: { view?: string }) {
                   {bulkItems.map((item) => (
                     <tr key={item.id} className="border-t border-[#dfe6e1]">
                       <td className="p-3">
-                        <Image
-                          src={item.image!}
-                          width={56}
-                          height={56}
-                          alt={item.title}
-                          className="size-14 rounded-lg object-cover"
+                        <ListingPhoto
+                          listingId={item.id}
+                          category={item.category}
+                          title={item.title}
+                          compact
+                          className="size-14 rounded-lg shrink-0"
                         />
                       </td>
                       <td>
@@ -221,12 +222,12 @@ export function VendorWorkspace({ view }: { view?: string }) {
                 className="vendor-card flex flex-col gap-4 p-4 sm:flex-row sm:items-center"
                 key={item.id}
               >
-                <Image
-                  src={item.image!}
-                  width={96}
-                  height={96}
-                  alt={item.title}
-                  className="h-36 w-full rounded-xl object-cover sm:size-24"
+                <ListingPhoto
+                  listingId={item.id}
+                  category={item.category}
+                  title={item.title}
+                  compact
+                  className="h-36 w-full rounded-xl sm:size-24 shrink-0"
                 />
                 <div className="min-w-0 flex-1">
                   <h2 className="vendor-display text-lg font-extrabold">
@@ -453,12 +454,12 @@ export function VendorWorkspace({ view }: { view?: string }) {
                 className="vendor-card flex items-center gap-4 p-3"
                 key={item.id}
               >
-                <Image
-                  src={item.image!}
-                  width={64}
-                  height={64}
-                  alt={item.title}
-                  className="size-16 rounded-xl object-cover"
+                <ListingPhoto
+                  listingId={item.id}
+                  category={item.category}
+                  title={item.title}
+                  compact
+                  className="size-16 rounded-xl shrink-0"
                 />
                 <div className="min-w-0">
                   <h3 className="truncate font-bold">{item.title}</h3>

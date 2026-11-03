@@ -1,13 +1,15 @@
 import Link from "next/link";
+import { safeListingReturn } from "@/lib/marketplace/buyer-actions";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { LoginForm } from "@/components/forms/login-form";
 
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ role?: string }>;
+  searchParams: Promise<{ role?: string; returnTo?: string }>;
 }) {
-  const { role: requestedRole } = await searchParams;
+  const { role: requestedRole, returnTo } = await searchParams;
+  const destination = safeListingReturn(returnTo);
   const role = requestedRole === "vendor" ? "vendor" : "buyer";
   return (
     <AuthShell>
@@ -41,6 +43,15 @@ export default async function LoginPage({
         <section className="min-w-0 p-7 md:p-9">
           <p className="auth-eyebrow">{role} sign in</p>
           <h1 className="auth-title">Welcome back</h1>
+          {destination && (
+            <p role="note" className="auth-status mt-4">
+              Sign-in required for this buyer action. This login is still a
+              demonstration and cannot authenticate or submit messages/orders.{" "}
+              <Link href={destination} className="underline">
+                Return to item
+              </Link>
+            </p>
+          )}
           <LoginForm key={role} role={role} />
           <p className="auth-muted mt-5 text-center text-sm">
             New to ScrapMart?{" "}

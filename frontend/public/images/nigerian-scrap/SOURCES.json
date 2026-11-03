@@ -1,0 +1,42 @@
+{
+  "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+  "reuse": "Commercial reuse and adaptation allowed subject to attribution, indication of changes and ShareAlike. These image derivatives are offered under CC BY-SA 4.0. No endorsement is implied. No model releases were supplied; photographs are used as contextual documentation, not testimonials.",
+  "assets": [
+    {
+      "file": "seme-bottles.webp",
+      "title": "Bagged plastic bottles in Seme",
+      "creator": "Bibiire1",
+      "source": "https://commons.wikimedia.org/wiki/File:Bagged_plastic_bottles_in_Seme.jpg",
+      "original": "https://upload.wikimedia.org/wikipedia/commons/3/3f/Bagged_plastic_bottles_in_Seme.jpg",
+      "provenance": "Original caption identifies Seme; original file page records the South West Nigeria Wiki Loves Africa campaign and Agbara category. Location is source-documented, not independently geolocated.",
+      "alt": "Bags of collected plastic bottles beside a cart in Seme, Nigeria. Context photograph, not seller inventory.",
+      "path": "/images/nigerian-scrap/seme-bottles.webp",
+      "license": "CC BY-SA 4.0",
+      "verifiedOn": "2026-11-02",
+      "sourceClaim": "Own work",
+      "placement": "Landing hero slideshow context only",
+      "modifications": "Auto-orientation, proportional resize to 1280 pixels wide, WebP quality 78; metadata removed. CSS object-cover crops the displayed view. No generated content or retouching.",
+      "derivativeLicense": "CC BY-SA 4.0",
+      "bytes": 56950,
+      "sha256": "4b224541f6ae9488077a7344b9854b7ff9158254007a20f0a74e966001907c56"
+    },
+    {
+      "file": "enugu-yard.webp",
+      "title": "Coal Camp Enugu",
+      "creator": "Tech.Felix",
+      "source": "https://commons.wikimedia.org/wiki/File:Coal_Camp_Enugu.jpg",
+      "original": "https://upload.wikimedia.org/wikipedia/commons/6/61/Coal_Camp_Enugu.jpg",
+      "provenance": "Original caption identifies Enugu; description explicitly identifies a junk yard in South East Nigeria. Location is source-documented, not independently geolocated.",
+      "alt": "Piles of discarded vehicle parts in a collection yard at Coal Camp, Enugu, Nigeria. Context photograph, not seller inventory.",
+      "path": "/images/nigerian-scrap/enugu-yard.webp",
+      "license": "CC BY-SA 4.0",
+      "verifiedOn": "2026-11-02",
+      "sourceClaim": "Own work",
+      "placement": "Landing hero slideshow context only",
+      "modifications": "Auto-orientation, proportional resize to 1280 pixels wide, WebP quality 78; metadata removed. CSS object-cover crops the displayed view. No generated content or retouching.",
+      "derivativeLicense": "CC BY-SA 4.0",
+      "bytes": 194952,
+      "sha256": "c808c6be909ce7a236f2da8ecfeab413a4dd541164ed74a4d2b1fa1afef516ae"
+    }
+  ]
+}

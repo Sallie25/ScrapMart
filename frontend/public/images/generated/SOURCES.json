@@ -1,0 +1,72 @@
+{
+  "provenance": "User supplied on 2026-11-02: generated specifically for ScrapMart using ChatGPT. Photorealistic AI illustrations, not photographs of Nigerian locations or seller inventory.",
+  "sourceDirectory": "/home/sallieakpan/Desktop/scrapmart-generated-images",
+  "permission": "Project owner explicitly authorized integration. No third-party photograph licence or independent documentary provenance is claimed. Exact generation model, prompts and dates were not supplied.",
+  "modifications": "Proportional resize to 1280px wide, WebP quality 78, metadata removed. Responsive object-cover display crop. Original files preserved.",
+  "assets": [
+    {
+      "material": "clothes",
+      "contents": "Clothing bales and assorted shoes",
+      "originalFile": "Colourful Clothing Bales and Worn Shoes.png",
+      "sourceSha256": "b9637ba0e3b6dd4554ceb6aa8d0c82e4532faa9fb5e32820062f1a3b72c836b6",
+      "path": "/images/generated/clothes.webp",
+      "bytes": 210140
+    },
+    {
+      "material": "cardboard",
+      "contents": "Flattened cardboard and compressed cardboard bales",
+      "originalFile": "Industrial Cardboard Recycling Bales.png",
+      "sourceSha256": "18eb9d28bea6dc4be2abd3a0e6c9b0f04a327fc6bb99c396626f9d3f5e1b5ddf",
+      "path": "/images/generated/cardboard.webp",
+      "bytes": 202726
+    },
+    {
+      "material": "bottles",
+      "contents": "Bags and bales of plastic bottles",
+      "originalFile": "Recycling Yard with Compressed Plastic Bottles.png",
+      "sourceSha256": "edd04fc75b0fc7fb5ddd6d7c80776d4bf655d6ca30ea0875eca606ddc63bd133",
+      "path": "/images/generated/bottles.webp",
+      "bytes": 187746
+    },
+    {
+      "material": "iron",
+      "contents": "Rusty steel beams, sections and pipes",
+      "originalFile": "Rusty Steel Scrap Pile in Daylight.png",
+      "sourceSha256": "93b2ad1f41fe336d65fbb5bcb3e449524ad1056a0ee14b52f7df18553ae5f2a9",
+      "path": "/images/generated/iron.webp",
+      "bytes": 188168
+    },
+    {
+      "material": "electronics",
+      "contents": "Discarded monitors, computer cases and circuit boards",
+      "originalFile": "Scrapyard Heap of Electronic Waste.png",
+      "sourceSha256": "4afc7c21df637936ca89a7d5807157efb5b7c1d9bc1dcf3b194ba41d90c1fcc5",
+      "path": "/images/generated/electronics.webp",
+      "bytes": 202686
+    },
+    {
+      "material": "aluminium",
+      "contents": "Silvery aluminium sections and offcuts",
+      "originalFile": "Shimmering Aluminium Scrap Pile.png",
+      "sourceSha256": "e47451b96209c8e8fcd49352ef78240258ad8e591cbde5cfdf4d794eb4fcc0a5",
+      "path": "/images/generated/aluminium.webp",
+      "bytes": 130486
+    },
+    {
+      "material": "copper",
+      "contents": "Coiled bare copper wire in a sack",
+      "originalFile": "Shiny Copper Wires in a Worn Sack.png",
+      "sourceSha256": "1c9b9b13b9e3054830b21724268014ecc28bd3678d36c41cc5ebe85b43651cc3",
+      "path": "/images/generated/copper.webp",
+      "bytes": 201406
+    },
+    {
+      "material": "tyres",
+      "contents": "Stacks of used tyres",
+      "originalFile": "Worn Tyres at the Recycling Yard.png",
+      "sourceSha256": "bc739d2b14b8f4ab6b39b487ebbc7f4b99e9344770a1dbdcea631aeec5d797b6",
+      "path": "/images/generated/tyres.webp",
+      "bytes": 188508
+    }
+  ]
+}

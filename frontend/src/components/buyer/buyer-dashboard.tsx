@@ -3,9 +3,11 @@ import { buyerListings } from "@/lib/data/buyer-fixtures";
 import { BuyerIcon } from "./buyer-icon";
 import { BuyerListingCard } from "./buyer-listing-card";
 import { CategoryGrid } from "./category-grid";
+import { BuyerOrders } from "./buyer-orders";
 export function BuyerDashboard({ view }: { view?: string }) {
+  if (view === "orders")
+    return <BuyerOrders state={{ status: "unavailable" }} />;
   const unavailable: Record<string, string> = {
-    orders: "My Orders",
     messages: "Messages",
     profile: "My Profile",
     settings: "Settings",

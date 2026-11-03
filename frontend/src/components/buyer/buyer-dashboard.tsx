@@ -19,8 +19,7 @@ export function BuyerDashboard({ view }: { view?: string }) {
         <p className="buyer-eyebrow">Buyer workspace</p>
         <h1 className="buyer-title mt-2">{unavailable[view]}</h1>
         <p className="buyer-muted mt-4 leading-relaxed">
-          {unavailable[view]} requires a real authenticated account. This
-          presentation has no connected account data; no orders, messages,
+          This view has no connected account data yet; no orders, messages,
           notifications or account changes have been created.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
@@ -29,9 +28,6 @@ export function BuyerDashboard({ view }: { view?: string }) {
           </Link>
           <Link href="/buyer/dashboard" className="buyer-button buyer-ghost">
             Back to overview
-          </Link>
-          <Link href="/login?role=buyer" className="buyer-button buyer-ghost">
-            Buyer login preview
           </Link>
         </div>
       </section>
@@ -42,7 +38,7 @@ export function BuyerDashboard({ view }: { view?: string }) {
         <div className="absolute right-0 top-0 h-full w-2/5 bg-[radial-gradient(circle_at_center,rgba(74,222,128,.18),transparent_70%)]" />
         <div className="relative max-w-3xl">
           <p className="text-sm font-bold text-[#74d99b]">
-            Good morning, Tunde · Sample buyer
+            Buyer workspace · Signed in
           </p>
           <h1 className="mt-2 text-3xl font-extrabold tracking-tight md:text-4xl">
             Welcome to your buyer dashboard

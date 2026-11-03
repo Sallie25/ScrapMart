@@ -95,9 +95,12 @@ class ClientDouble {
   }
   release(destroy) { this.db.unlock(this); this.db.releases.push(Boolean(destroy)); }
 }
+// Offline observability only: never exported by the production database module.
+export const poolObservations = [];
 export class Pool {
   #db; #closed = false;
   constructor(settings) {
+    poolObservations.push(settings);
     this.#db = databases.find(db => db.settings.port === settings.port);
     if (!this.#db) throw new Error('Unexpected offline pool configuration; no connection attempted');
   }

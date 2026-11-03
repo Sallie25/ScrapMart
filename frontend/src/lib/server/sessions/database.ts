@@ -3,10 +3,10 @@ import { Pool } from 'pg';
 import type { PoolClient } from 'pg';
 import { SessionError } from './crypto';
 
-export type SessionConnectionSettings = Readonly<{
-  host: '127.0.0.1'; port: number; database: 'scrapmart_bff_local_test';
-  user: 'scrapmart_bff_runtime'; password: string;
-}>;
+import { validateSessionSettings } from './connection-settings';
+import type { SessionConnectionSettings } from './connection-settings';
+export type { SessionConnectionSettings } from './connection-settings';
+
 type Rows = Record<string, unknown>[];
 const ignoreClientError = () => {}; // Query failures are returned as generic SessionError.
 
@@ -16,20 +16,17 @@ export class OwnedSessionDatabase {
   #pool: Pool;
   constructor(settings: SessionConnectionSettings) {
     try {
-      if (!settings || ![Object.prototype, null].includes(Object.getPrototypeOf(settings))) throw new SessionError();
-      const descriptors = Object.getOwnPropertyDescriptors(settings);
-      const names = ['host', 'port', 'database', 'user', 'password'];
-      if (Object.keys(descriptors).length !== names.length ||
-          names.some(name => !descriptors[name] || !('value' in descriptors[name]))) throw new SessionError();
-      if (settings.host !== '127.0.0.1' || settings.database !== 'scrapmart_bff_local_test' ||
-          settings.user !== 'scrapmart_bff_runtime' || !Number.isInteger(settings.port) ||
-          settings.port < 1024 || settings.port > 65535 || typeof settings.password !== 'string' ||
-          !settings.password) throw new SessionError();
+      validateSessionSettings(settings);
+      const remote = 'mode' in settings;
+      if (remote && process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0') throw new SessionError();
       this.#pool = new Pool({ host: settings.host, port: settings.port, database: settings.database,
-        user: settings.user, password: settings.password, ssl: false, max: 4,
-        options: '-c synchronous_commit=on',
+        user: settings.user, password: settings.password, ssl: remote ? {
+          rejectUnauthorized: true, minVersion: 'TLSv1.2', servername: settings.host,
+          ...('ca' in settings && settings.ca ? { ca: settings.ca } : {}),
+        } : false, max: 4,
+        options: remote ? '-c synchronous_commit=on -c search_path=pg_catalog,bff_sessions,pg_temp' : '-c synchronous_commit=on',
         connectionTimeoutMillis: 2000, idleTimeoutMillis: 10000,
-        statement_timeout: 5000, query_timeout: 6000, application_name: 'scrapmart-bff-local' });
+        statement_timeout: 5000, query_timeout: 6000, application_name: remote ? 'scrapmart-bff-runtime' : 'scrapmart-bff-local' });
       this.#pool.on('error', () => {});
     } catch { throw new SessionError(); }
   }

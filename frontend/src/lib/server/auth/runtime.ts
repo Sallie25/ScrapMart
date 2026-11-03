@@ -1,6 +1,7 @@
 import 'server-only';
 import { createBffHandlers } from './bff';
 
-// Intentionally no environment switch, fetch transport, pool or secret loading.
-// Enabling real dependencies requires a separately authorized integration batch.
+// Deployment preparation is available through AuthenticationRuntimeConfiguration.
+// This route deliberately stays unwired: no ambient environment can activate it.
+// A future authorized bootstrap must validate config, inject transport and own shutdown.
 export const handleAuthentication = createBffHandlers();

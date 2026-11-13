@@ -637,24 +637,19 @@ function OnboardingSections() {
 function HeroMediaSlider() {
   const slides = [
     [
-      "/images/landing/vehicle-scrap.jpg",
-      "Used vehicles and reusable auto parts in a Nigerian vehicle yard",
-      "Vehicle scrap",
+      "/images/hero-slideshow/scrapmart-green-recycling-truck.png",
+      "Green ScrapMart truck carrying recyclable plastic bottles",
+      "Recycling truck",
     ],
     [
-      "/images/landing/local-collection.jpg",
-      "A Nigerian collector moving reusable materials by cart",
-      "Local collection",
+      "/images/hero-slideshow/discarded-air-conditioners.png",
+      "Discarded air conditioners and cooling units",
+      "Cooling units",
     ],
     [
-      "/images/landing/auto-parts.jpg",
-      "Yellow commercial vehicles in Lagos, Nigeria",
-      "Auto parts",
-    ],
-    [
-      "/images/landing/lagos-market.jpg",
-      "People trading at a busy local market in Lagos",
-      "Lagos market",
+      "/images/hero-slideshow/used-engines.png",
+      "Used engines and automotive components in a salvage yard",
+      "Used engines",
     ],
   ];
   const [activeSlide, setActiveSlide] = useState(0);
@@ -671,7 +666,7 @@ function HeroMediaSlider() {
       return;
     const timer = window.setInterval(
       () => setActiveSlide((current) => (current + 1) % slides.length),
-      2500,
+      6000,
     );
     return () => window.clearInterval(timer);
   }, [paused, hovered, focused, slides.length]);
@@ -680,7 +675,7 @@ function HeroMediaSlider() {
       role="region"
       aria-roledescription="carousel"
       aria-label="ScrapMart local marketplace"
-      className="relative mb-6"
+      className="landing-hero-media relative"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onFocusCapture={() => setFocused(true)}
@@ -689,8 +684,8 @@ function HeroMediaSlider() {
           setFocused(false);
       }}
     >
-      <div className="relative h-[25rem] sm:h-[32rem] overflow-hidden rounded-[2rem] bg-[var(--landing-ink)] p-3 shadow-2xl">
-        <div className="relative h-full overflow-hidden rounded-[1.4rem]">
+      <div className="landing-hero-image h-full overflow-hidden">
+        <div className="relative h-full overflow-hidden">
           {slides.map(([src, alt, label], index) => (
             <div
               key={label}
@@ -701,44 +696,41 @@ function HeroMediaSlider() {
                 src={src}
                 alt={activeSlide === index ? alt : ""}
                 fill
-                sizes="(min-width: 1024px) 46vw, 100vw"
+                sizes="(min-width: 1280px) 42vw, (min-width: 900px) 48vw, 100vw"
                 preload={index === 0}
                 className="object-cover"
               />
-              <span className="absolute bottom-5 left-5 rounded-full bg-white px-3 py-1.5 text-xs font-extrabold text-[var(--landing-ink)] shadow">
-                {label}
-              </span>
             </div>
           ))}
           <button
             type="button"
             onClick={() => setPaused(!paused)}
-            className="absolute right-4 top-4 min-h-10 rounded-full bg-white/95 px-4 text-xs font-bold text-[var(--landing-ink)]"
+            className="landing-hero-playback absolute right-4 top-4 z-20 min-h-10 rounded-full px-4 text-xs font-bold"
             aria-label={paused ? "Play slideshow" : "Pause slideshow"}
           >
             {paused ? "Play" : "Pause"}
           </button>
-          <div className="absolute bottom-5 right-5 flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-2 shadow">
+          <div className="landing-hero-dots absolute bottom-5 right-5 z-20 flex items-center gap-1.5 rounded-full px-2.5 py-2 shadow">
             {slides.map(([, , label], index) => (
               <button
                 key={label}
                 onClick={() => setActiveSlide(index)}
                 aria-label={`Show ${label} slide`}
                 aria-pressed={activeSlide === index}
-                className={`min-h-6 rounded-full border-y-8 border-transparent bg-clip-padding transition-all duration-300 ${activeSlide === index ? "w-6 bg-[var(--landing-brand)]" : "w-2 bg-[var(--landing-line)] hover:bg-[var(--landing-muted)]"}`}
+                className={`min-h-6 rounded-full border-y-8 border-transparent bg-clip-padding transition-all duration-300 ${activeSlide === index ? "w-6 bg-[var(--landing-brand-light)]" : "w-2 bg-white/50 hover:bg-white"}`}
               />
             ))}
           </div>
         </div>
       </div>
-      <div className="absolute -bottom-5 -left-3 max-w-xs rounded-2xl border border-[var(--landing-line)] bg-white p-4 shadow-xl sm:-left-8">
-        <p className="text-xs font-bold uppercase tracking-widest text-[var(--landing-muted)]">
+      <div className="landing-hero-note absolute bottom-5 left-5 z-20 max-w-xs rounded-2xl p-4 shadow-xl">
+        <p className="text-xs font-bold uppercase tracking-widest text-[var(--landing-brand-light)]">
           Safe payment
         </p>
-        <p className="mt-1 [font-family:var(--font-landing-manrope)] text-lg font-extrabold text-[var(--landing-ink)]">
+        <p className="mt-1 [font-family:var(--font-landing-manrope)] text-lg font-extrabold text-white">
           Pay only after delivery
         </p>
-        <p className="mt-1 text-sm text-[var(--landing-muted)]">
+        <p className="mt-1 text-sm text-[#d0e4d7]">
           Cash, POS or transfer at delivery.
         </p>
       </div>
@@ -753,48 +745,48 @@ export function Welcome() {
         PAY ON DELIVERY · Never pay before receiving your item
       </div>
       <LandingHeader />
-      <section className="mx-auto grid max-w-7xl items-center gap-10 px-5 pb-12 pt-8 lg:grid-cols-[1.05fr_.95fr] lg:py-16">
-        <div className="max-w-2xl">
+      <section className="landing-hero mx-4 mb-12 mt-8 max-w-7xl sm:mx-6 2xl:mx-auto" aria-labelledby="landing-hero-title">
+        <div className="landing-hero-copy max-w-2xl">
           <Badge>Nigerian marketplace prototype</Badge>
-          <h1 className="mt-5 [font-family:var(--font-landing-manrope)] text-5xl font-extrabold leading-[1.02] tracking-[-0.04em] text-[var(--landing-ink)] sm:text-6xl lg:text-7xl">
+          <h1 id="landing-hero-title" className="landing-hero-title mt-5 [font-family:var(--font-landing-manrope)] font-extrabold leading-[1.02] tracking-[-0.04em]">
             Buy and sell scrap,{" "}
-            <span className="text-[var(--landing-brand)]">simply.</span>
+            <span className="text-[var(--landing-brand-light)]">simply.</span>
           </h1>
-          <p className="mt-6 max-w-xl text-lg font-medium leading-relaxed text-[var(--landing-muted)]">
+          <p className="landing-hero-description mt-6 max-w-xl text-lg font-medium leading-relaxed">
             Find scrap vendors near you, or turn unused materials into money. No
             advance payment required.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Button href="/signup?role=vendor" className="min-w-48">
+            <Button href="/signup?role=vendor" className="landing-hero-primary min-w-48">
               I want to sell scrap
             </Button>
             <Button
               variant="ghost"
               href="/signup?role=buyer"
-              className="min-w-48"
+              className="landing-hero-secondary min-w-48"
             >
               I want to buy scrap
             </Button>
           </div>
-          <div className="mt-8 flex flex-wrap gap-x-6 gap-y-3 text-sm font-bold text-[var(--landing-muted)]">
+          <div className="landing-hero-points mt-8 flex flex-wrap gap-x-6 gap-y-3 text-sm font-bold">
             <span className="flex items-center gap-2">
               <Icon
                 name="check"
-                className="size-4 text-[var(--landing-brand)]"
+                className="size-4 text-[var(--landing-brand-light)]"
               />
               Vendor verification planned
             </span>
             <span className="flex items-center gap-2">
               <Icon
                 name="check"
-                className="size-4 text-[var(--landing-brand)]"
+                className="size-4 text-[var(--landing-brand-light)]"
               />
               Pay on delivery
             </span>
             <span className="flex items-center gap-2">
               <Icon
                 name="check"
-                className="size-4 text-[var(--landing-brand)]"
+                className="size-4 text-[var(--landing-brand-light)]"
               />
               Local sellers
             </span>

@@ -38,6 +38,111 @@
   font-weight: 800;
   letter-spacing: -0.035em;
 }
+.landing-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  overflow: hidden;
+  color: #fff;
+  background: #00452f;
+  border: 1px solid #174d37;
+  border-radius: 24px;
+  box-shadow: 0 16px 30px -20px #063e2c52;
+}
+.landing-hero-copy {
+  align-self: center;
+  min-width: 0;
+  padding: 44px 40px;
+}
+.landing-hero-title {
+  color: #fff;
+  font-size: clamp(42px, 4.2vw, 64px);
+}
+.landing-hero-description,
+.landing-hero-points {
+  color: #d2e5da;
+}
+.landing-hero .landing-hero-primary {
+  color: #064d31;
+  background: #f2fff7;
+}
+.landing-hero .landing-hero-primary:hover {
+  background: #d8f4e4;
+}
+.landing-hero .landing-hero-secondary {
+  color: #edf8f2;
+  background: #ffffff0f;
+  border-color: #d5f0e159;
+}
+.landing-hero .landing-hero-secondary:hover {
+  color: #fff;
+  background: #ffffff24;
+  border-color: #c3e3d0;
+}
+.landing-hero-media {
+  min-width: 0;
+  min-height: 450px;
+}
+.landing-hero-image {
+  position: absolute;
+  inset: 0;
+}
+.landing-hero-image::after {
+  content: "";
+  position: absolute;
+  z-index: 10;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, #00452f24, transparent 35%),
+    linear-gradient(transparent 35%, #00251759);
+}
+.landing-hero-playback,
+.landing-hero-dots,
+.landing-hero-note {
+  color: #fff;
+  background: #073523e6;
+  border: 1px solid #e8f6ed59;
+}
+.landing-hero-playback:hover {
+  background: #064829;
+}
+.landing-hero-note {
+  max-width: calc(100% - 145px);
+}
+@media (max-width: 899px) {
+  .landing-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .landing-hero-copy {
+    padding: 35px;
+  }
+  .landing-hero-media {
+    min-height: 320px;
+  }
+}
+@media (max-width: 639px) {
+  .landing-hero-copy {
+    padding: 28px 23px;
+  }
+  .landing-hero-title {
+    font-size: 40px;
+  }
+  .landing-hero-media {
+    min-height: 300px;
+  }
+  .landing-hero-note {
+    bottom: 16px;
+    left: 16px;
+    max-width: calc(100% - 32px);
+    padding: 12px;
+    font-size: 12px;
+  }
+  .landing-hero-dots {
+    top: 16px;
+    right: auto;
+    bottom: auto;
+    left: 16px;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .landing-page *,
   .landing-page *::before,

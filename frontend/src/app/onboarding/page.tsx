@@ -81,8 +81,7 @@ export default async function OnboardingPage({
           </article>
         </div>
         <p className="auth-muted mt-6 text-xs">
-          Presentation prototype · Registration and sign-in are not connected
-          yet.
+          Account requests are handled by ScrapMart authentication when the service is available.
         </p>
       </div>
     </AuthShell>

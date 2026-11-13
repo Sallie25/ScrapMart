@@ -1,0 +1,142 @@
+import 'server-only';
+import { z } from 'zod';
+import { acknowledgment, capabilities, vendorProfile, tokenResponse } from './contracts';
+import type { Role } from './contracts';
+import type { Credentials } from '../sessions/crypto';
+
+export const backendRefreshCookie = '__Secure-scrapmart_refresh';
+export class BackendFailure extends Error {
+  readonly status: number;
+  readonly retryAfter?: string;
+  readonly fields: string[];
+  constructor(status = 503, retryAfter?: string, fields: string[] = []) {
+    super('Authentication service unavailable'); this.name = 'BackendFailure';
+    this.status = status; this.retryAfter = retryAfter; this.fields = fields;
+  }
+}
+export type HttpTransport = (request: Request) => Promise<Response>;
+export function exactHttpsOrigin(value: string): string {
+  const url = new URL(value);
+  if (url.protocol !== 'https:' || url.username || url.password || url.origin !== value) throw new BackendFailure();
+  return url.origin;
+}
+export async function boundedJson(body: ReadableStream<Uint8Array> | null, signal?: AbortSignal): Promise<unknown> {
+  if (!body) throw new BackendFailure(422);
+  const reader = body.getReader(); const chunks: Uint8Array[] = []; let length = 0;
+  const cancel = () => { void reader.cancel().catch(() => {}); };
+  signal?.addEventListener('abort', cancel, { once: true });
+  if (signal?.aborted) cancel();
+  try {
+    while (true) {
+      const chunk = await reader.read(); if (chunk.done) break;
+      length += chunk.value.byteLength;
+      if (length > 16384) { void reader.cancel().catch(() => {}); throw new BackendFailure(413); }
+      chunks.push(chunk.value);
+    }
+    if (signal?.aborted) throw new BackendFailure();
+    const bytes = new Uint8Array(length); let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+  } catch (error) { if (error instanceof BackendFailure) throw error; throw new BackendFailure(422); }
+  finally { signal?.removeEventListener('abort', cancel); reader.releaseLock(); }
+}
+function refreshCookie(headers: Headers): { value: string; expiresAt: Date } {
+  const matching = headers.getSetCookie().filter(cookie => cookie.split('=', 1)[0].trim() === backendRefreshCookie);
+  if (matching.length !== 1) throw new BackendFailure();
+  if (matching[0].length > 2048) throw new BackendFailure();
+  const [first, ...parts] = matching[0].split(';');
+  const value = first.slice(first.indexOf('=') + 1);
+  if (!/^[A-Za-z0-9_-]{43}$/.test(value) || Buffer.from(value, 'base64url').toString('base64url') !== value) throw new BackendFailure();
+  const attrs: Record<string, string> = Object.create(null);
+  for (const part of parts) {
+    const [name, ...rest] = part.trim().split('='); const key = name.toLowerCase();
+    if (Object.hasOwn(attrs, key)) throw new BackendFailure(); attrs[key] = rest.join('=');
+  }
+  if (attrs.secure !== '' || attrs.httponly !== '' || attrs.path !== '/api/v1/auth' ||
+      attrs.samesite?.toLowerCase() !== 'lax' || Object.hasOwn(attrs, 'domain') ||
+      !/^\d+$/.test(attrs['max-age'] ?? '') || !Number.isSafeInteger(Number(attrs['max-age'])) ||
+      Number(attrs['max-age']) < 1 || Number(attrs['max-age']) > 2147483647) throw new BackendFailure();
+  const expiresAt = new Date(attrs.expires);
+  if (!Number.isFinite(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) throw new BackendFailure();
+  return { value, expiresAt };
+}
+
+// No default fetch, global network transport or deployment configuration. Tests
+// inject a synthetic transport; production wiring is deliberately disabled.
+export class BackendAuthClient {
+  #origin: string; #browserOrigin: string; #transport: HttpTransport; #timeout: number;
+  constructor(options: { origin: string; browserOrigin: string; transport: HttpTransport; timeoutMs?: number }) {
+    this.#origin = exactHttpsOrigin(options.origin); this.#browserOrigin = exactHttpsOrigin(options.browserOrigin);
+    this.#transport = options.transport; this.#timeout = options.timeoutMs ?? 5000;
+    if (typeof this.#transport !== 'function' || !Number.isInteger(this.#timeout) || this.#timeout < 1 || this.#timeout > 10000) throw new BackendFailure();
+  }
+  async #call<T>(path: string, method: 'GET' | 'POST', decode: (body: unknown, headers: Headers, started: number) => T,
+    options: { body?: unknown; bearer?: string; cookie?: string } = {}): Promise<T> {
+    const controller = new AbortController(); let timer: ReturnType<typeof setTimeout> | undefined;
+    const started = Date.now();
+    try {
+      const headers = new Headers();
+      if (method === 'POST') { headers.set('Origin', this.#browserOrigin); headers.set('X-ScrapMart-CSRF', '1'); }
+      if (options.body !== undefined) headers.set('Content-Type', 'application/json');
+      if (options.bearer) headers.set('Authorization', `Bearer ${options.bearer}`);
+      if (options.cookie) headers.set('Cookie', `${backendRefreshCookie}=${options.cookie}`);
+      const request = new Request(this.#origin + '/api/v1/auth' + path, { method, headers,
+        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+        signal: controller.signal, redirect: 'error', credentials: 'omit', cache: 'no-store' });
+      return await Promise.race([
+        (async () => {
+          const response = await this.#transport(request);
+          if (response.status === 204) {
+            if (path !== '/logout') throw new BackendFailure();
+            return decode(null, response.headers, started);
+          }
+          if (response.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() !== 'application/json') throw new BackendFailure();
+          let body: unknown;
+          try { body = await boundedJson(response.body, controller.signal); } catch { throw new BackendFailure(); }
+          if (response.status < 200 || response.status >= 300) {
+            const error = z.object({ detail: z.object({ fields: z.array(z.string()).max(5).optional() }).passthrough() }).safeParse(body);
+            const fields = error.success ? error.data.detail.fields ?? [] : [];
+            const retry = response.headers.get('retry-after');
+            throw new BackendFailure([401,403,413,415,422,429,503].includes(response.status) ? response.status : 502,
+              retry && /^\d{1,5}$/.test(retry) ? retry : undefined, fields);
+          }
+          if (response.status !== (path === '/logout' ? 204 : path.endsWith('/signup') ? 202 : 200)) throw new BackendFailure();
+          return decode(body, response.headers, started);
+        })(),
+        new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new BackendFailure()); }, this.#timeout); }),
+      ]);
+    } catch (error) { if (error instanceof BackendFailure) throw error; throw new BackendFailure(); }
+    finally { if (timer) clearTimeout(timer); controller.abort(); }
+  }
+  register(role: Role, body: unknown): Promise<void> {
+    return this.#call(`/${role}/signup`, 'POST', value => {
+      if (!z.object({ message: z.literal(acknowledgment) }).strict().safeParse(value).success) throw new BackendFailure();
+    }, { body });
+  }
+  #credentials(body: unknown, headers: Headers, started: number): { credentials: Credentials; expiresAt: Date } {
+    const parsed = tokenResponse.safeParse(body); if (!parsed.success) throw new BackendFailure();
+    const cookie = refreshCookie(headers);
+    return { credentials: { accessToken: parsed.data.access_token, refreshCookie: cookie.value,
+      accessExpiresAt: new Date(started + parsed.data.expires_in * 1000).toISOString() }, expiresAt: cookie.expiresAt };
+  }
+  login(role: Role, body: unknown) {
+    return this.#call(`/${role}/login`, 'POST', (value, headers, started) => this.#credentials(value, headers, started), { body });
+  }
+  refresh(cookie: string) {
+    return this.#call('/refresh', 'POST', (value, headers, started) => this.#credentials(value, headers, started), { cookie });
+  }
+  logout(cookie: string): Promise<void> {
+    return this.#call('/logout', 'POST', value => { if (value !== null) throw new BackendFailure(); }, { cookie });
+  }
+  capabilities(bearer: string) {
+    return this.#call('/capabilities', 'GET', value => {
+      const parsed = capabilities.safeParse(value); if (!parsed.success) throw new BackendFailure(); return parsed.data;
+    }, { bearer });
+  }
+  vendorStatus(bearer: string) {
+    return this.#call('/vendor/me', 'GET', value => {
+      const parsed = vendorProfile.safeParse(value); if (!parsed.success) throw new BackendFailure();
+      return { verification_status: parsed.data.verification_status };
+    }, { bearer });
+  }
+}

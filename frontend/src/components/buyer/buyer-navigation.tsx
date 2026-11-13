@@ -3,13 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BuyerIcon } from "./buyer-icon";
+import { BuyerLogoutButton } from "./buyer-logout-button";
 const nav = [
   ["Overview", "/buyer/dashboard", "home"],
   ["Browse Marketplace", "/marketplace", "search"],
   ["My Orders", "/buyer/dashboard?view=orders", "orders"],
   ["Messages", "/buyer/dashboard?view=messages", "message"],
 ] as const;
-export function BuyerNavigation({ view }: { view?: string }) {
+export function BuyerNavigation({ view, authenticated = false }: { view?: string; authenticated?: boolean }) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -94,13 +95,11 @@ export function BuyerNavigation({ view }: { view?: string }) {
         >
           ScrapMart home
         </Link>
-        <Link
+        {authenticated ? <BuyerLogoutButton /> : <Link
           href="/login?role=buyer"
           className="buyer-nav-link"
           onClick={() => setOpen(false)}
-        >
-          Log in
-        </Link>
+        >Log in</Link>}
       </div>
     </>
   );
@@ -111,9 +110,9 @@ export function BuyerNavigation({ view }: { view?: string }) {
         <div className="flex-1 overflow-y-auto px-4 pt-4">{links}</div>
         <div className="p-4">
           <div className="buyer-dark rounded-2xl p-4 text-white">
-            <p className="text-sm font-bold">Buyer presentation</p>
+            <p className="text-sm font-bold">Buyer workspace</p>
             <p className="mt-1 text-xs text-slate-300">
-              Sample workspace · Not signed in
+              {authenticated ? "Signed in · Account data preview" : "Sample workspace · Not signed in"}
             </p>
           </div>
         </div>
@@ -134,7 +133,7 @@ export function BuyerNavigation({ view }: { view?: string }) {
           <div className="lg:hidden">{logo}</div>
           <div className="hidden lg:block">
             <p className="buyer-muted text-[11px] font-bold">
-              Buyer workspace · Preview
+              {authenticated ? "Buyer workspace" : "Buyer workspace · Preview"}
             </p>
             <p className="buyer-display text-base font-extrabold">
               {path === "/buyer/dashboard"
@@ -159,7 +158,7 @@ export function BuyerNavigation({ view }: { view?: string }) {
             aria-label="Open profile"
             className="buyer-dark grid size-9 shrink-0 place-items-center rounded-full text-[11px] font-extrabold text-white"
           >
-            Demo
+            {authenticated ? "Buyer" : "Demo"}
           </Link>
         </div>
       </header>

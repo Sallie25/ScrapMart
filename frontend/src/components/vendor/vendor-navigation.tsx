@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { VendorIcon } from "./vendor-icon";
+import { VendorLogoutButton } from "./vendor-logout-button";
 const nav = [
   ["Overview", "/vendor/dashboard", "home"],
   ["My Listings", "/vendor/listings", "store"],
@@ -95,13 +96,7 @@ export function VendorNavigation() {
         >
           ScrapMart home
         </Link>
-        <Link
-          href="/login?role=vendor"
-          className="vendor-nav-link"
-          onClick={() => setOpen(false)}
-        >
-          Log in
-        </Link>
+        <VendorLogoutButton />
       </div>
     </>
   );
@@ -112,9 +107,9 @@ export function VendorNavigation() {
         <div className="flex-1 overflow-y-auto px-4 pt-4">{links}</div>
         <div className="p-4">
           <div className="vendor-dark rounded-2xl p-4 text-white">
-            <p className="text-sm font-bold">Vendor presentation</p>
+            <p className="text-sm font-bold">Vendor account</p>
             <p className="mt-1 text-xs text-slate-300">
-              Sample workspace · Not signed in
+              Listings and verification come from ScrapMart.
             </p>
           </div>
         </div>
@@ -170,7 +165,7 @@ export function VendorNavigation() {
             aria-label="Open profile"
             className="vendor-dark grid size-9 shrink-0 place-items-center rounded-full text-[11px] font-extrabold text-white"
           >
-            Demo
+              Shop
           </Link>
         </div>
       </header>

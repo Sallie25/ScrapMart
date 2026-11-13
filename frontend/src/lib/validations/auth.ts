@@ -51,16 +51,16 @@ const commonSignupFields = {
   password: signupPasswordSchema,
   previewConsent: z
     .boolean()
-    .refine(Boolean, "Confirm that you understand this is a demo"),
+    .refine(Boolean, "Confirm the registration acknowledgement"),
 };
 export const buyerSignupSchema = z.object(commonSignupFields);
 export const vendorSignupSchema = buyerSignupSchema.extend({
   businessName: z.string().trim().min(2, "Enter your shop or business name"),
-  businessLocation: z.string().trim().min(2, "Enter your shop location"),
+  businessLocation: z.string().trim().optional(),
   businessAddress: z
     .string()
     .trim()
-    .min(5, "Enter a more complete shop address"),
+    .optional(),
 });
 export type BuyerSignupValues = z.infer<typeof buyerSignupSchema>;
 export type VendorSignupValues = z.infer<typeof vendorSignupSchema>;

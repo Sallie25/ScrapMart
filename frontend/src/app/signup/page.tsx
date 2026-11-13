@@ -17,7 +17,7 @@ export default async function SignupPage({
       >
         <aside className="auth-dark-panel hidden p-9 text-white lg:block">
           <span className="auth-step-badge inline-flex rounded-full px-3 py-1 text-xs font-bold">
-            {vendor ? "Step 1 of 3" : "Registration preview"}
+            {vendor ? "Step 1 of 3" : "Buyer registration"}
           </span>
           <h2 className="auth-display mt-7 text-4xl font-extrabold">
             {vendor
@@ -26,15 +26,15 @@ export default async function SignupPage({
           </h2>
           <p className="mt-4 text-slate-300">
             {vendor
-              ? "Vendor identity review is planned to help keep ScrapMart safe for everyone."
+              ? "Vendor identity review is required before selling on ScrapMart."
               : "Discover local materials and always pay on delivery."}
           </p>
           <div className="mt-10 rounded-2xl bg-white/10 p-5">
             <p className="text-sm font-bold text-[#74d99b]">Safety first</p>
             <p className="mt-2 text-sm leading-relaxed text-slate-300">
               {vendor
-                ? "Identification upload and review are not connected. Do not submit identity documents in this demo."
-                : "Your details stay in this form. No account is created in this demo."}
+                ? "After sign-in, submit your identity document and phone proof for review. Approval is determined by the backend."
+                : "Registration is confirmed only by the authentication service. Pay on delivery remains the payment policy."}
             </p>
           </div>
         </aside>
@@ -44,7 +44,7 @@ export default async function SignupPage({
             Create {role} account
           </h1>
           <p className="auth-muted mt-2 text-sm">
-            Fill in the required details to preview registration.
+            Fill in the required details to register with ScrapMart.
           </p>
           <SignupForm key={role} role={role} />
           <p className="auth-muted mt-5 text-center text-sm">

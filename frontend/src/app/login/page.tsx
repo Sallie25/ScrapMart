@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { LoginForm } from "@/components/forms/login-form";
+import { safeListingReturn } from "@/lib/marketplace/buyer-actions";
 
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ role?: string }>;
+  searchParams: Promise<{ role?: string; returnTo?: string }>;
 }) {
-  const { role: requestedRole } = await searchParams;
+  const { role: requestedRole, returnTo } = await searchParams;
   const role = requestedRole === "vendor" ? "vendor" : "buyer";
   return (
     <AuthShell>
@@ -20,8 +21,7 @@ export default async function LoginPage({
             Your marketplace is ready.
           </h2>
           <p className="mt-3 text-sm leading-relaxed text-slate-300">
-            Sign in to access your saved orders, listings and messages when
-            authentication is connected.
+            Sign in to access your account, listings, orders and messages.
           </p>
           <div className="mt-8 rounded-2xl bg-white/10 p-4">
             <p className="text-xs font-bold uppercase tracking-wider text-[#74d99b]">
@@ -41,7 +41,7 @@ export default async function LoginPage({
         <section className="min-w-0 p-7 md:p-9">
           <p className="auth-eyebrow">{role} sign in</p>
           <h1 className="auth-title">Welcome back</h1>
-          <LoginForm key={role} role={role} />
+          <LoginForm key={role} role={role} returnTo={role === "buyer" ? safeListingReturn(returnTo) : null} />
           <p className="auth-muted mt-5 text-center text-sm">
             New to ScrapMart?{" "}
             <Link

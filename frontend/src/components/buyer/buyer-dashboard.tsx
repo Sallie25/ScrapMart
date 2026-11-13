@@ -1,12 +1,14 @@
 import Link from "next/link";
-import { buyerListings } from "@/lib/data/buyer-fixtures";
+import type { MarketplaceView } from "@/lib/server/marketplace/page-data";
 import { BuyerIcon } from "./buyer-icon";
-import { BuyerListingCard } from "./buyer-listing-card";
-import { CategoryGrid } from "./category-grid";
-export function BuyerDashboard({ view }: { view?: string }) {
+import { LiveBuyerListingCard, LiveCategoryGrid } from "./live-overview";
+import { BuyerOrderHistory } from "./buyer-order-history";
+import { AccountMessages } from "@/components/account/account-messages";
+export function BuyerDashboard({ view, marketplace }: { view?: string; marketplace: MarketplaceView }) {
+  if (view === "orders")
+    return <BuyerOrderHistory />;
+  if (view === "messages") return <AccountMessages role="buyer" />;
   const unavailable: Record<string, string> = {
-    orders: "My Orders",
-    messages: "Messages",
     profile: "My Profile",
     settings: "Settings",
     notifications: "Notifications",
@@ -17,8 +19,7 @@ export function BuyerDashboard({ view }: { view?: string }) {
         <p className="buyer-eyebrow">Buyer workspace</p>
         <h1 className="buyer-title mt-2">{unavailable[view]}</h1>
         <p className="buyer-muted mt-4 leading-relaxed">
-          {unavailable[view]} requires a real authenticated account. This
-          presentation has no connected account data; no orders, messages,
+          This view has no connected account data yet; no orders, messages,
           notifications or account changes have been created.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
@@ -27,9 +28,6 @@ export function BuyerDashboard({ view }: { view?: string }) {
           </Link>
           <Link href="/buyer/dashboard" className="buyer-button buyer-ghost">
             Back to overview
-          </Link>
-          <Link href="/login?role=buyer" className="buyer-button buyer-ghost">
-            Buyer login preview
           </Link>
         </div>
       </section>
@@ -40,14 +38,14 @@ export function BuyerDashboard({ view }: { view?: string }) {
         <div className="absolute right-0 top-0 h-full w-2/5 bg-[radial-gradient(circle_at_center,rgba(74,222,128,.18),transparent_70%)]" />
         <div className="relative max-w-3xl">
           <p className="text-sm font-bold text-[#74d99b]">
-            Good morning, Tunde · Sample buyer
+            Buyer workspace · Signed in
           </p>
           <h1 className="mt-2 text-3xl font-extrabold tracking-tight md:text-4xl">
             Welcome to your buyer dashboard
           </h1>
           <p className="mt-2 text-sm text-slate-300">
-            Explore sample materials and local vendors. Orders and messages need
-            account integration.
+            Explore live materials from approved vendors. Orders and messages
+            remain available only when their account services are connected.
           </p>
           <form
             action="/marketplace"
@@ -80,12 +78,7 @@ export function BuyerDashboard({ view }: { view?: string }) {
           ["Active orders", "—", "orders", "/buyer/dashboard?view=orders"],
           ["Unread messages", "—", "message", "/buyer/dashboard?view=messages"],
           ["Verified vendors", "—", "check", "/marketplace"],
-          [
-            "Sample listings",
-            String(buyerListings.length),
-            "pin",
-            "/marketplace",
-          ],
+          ["Live listings", marketplace.page ? String(marketplace.page.listings.length) : "—", "pin", "/marketplace"],
         ].map(([label, value, icon, href]) => (
           <Link
             key={label}
@@ -99,9 +92,7 @@ export function BuyerDashboard({ view }: { view?: string }) {
               <strong className="buyer-display block text-2xl">{value}</strong>
               <span className="buyer-muted text-sm font-semibold">{label}</span>
               <span className="buyer-muted mt-1 block text-[10px]">
-                {label === "Sample listings"
-                  ? "Presentation fixtures"
-                  : "Not connected"}
+                {label === "Live listings" ? "Current marketplace page" : "Not connected"}
               </span>
             </span>
             <BuyerIcon name="chevron" className="buyer-muted ml-auto size-4" />
@@ -118,23 +109,23 @@ export function BuyerDashboard({ view }: { view?: string }) {
             View all
           </Link>
         </div>
-        <CategoryGrid />
+        {marketplace.error ? <p role="alert" className="buyer-muted mt-5">Live categories are unavailable.</p> : <LiveCategoryGrid categories={marketplace.categories} />}
       </section>
       <section className="mt-10">
         <div className="flex items-end justify-between gap-3">
           <div>
-            <p className="buyer-eyebrow">Sample Lagos locations</p>
-            <h2 className="buyer-title">Nearby scrap</h2>
+            <p className="buyer-eyebrow">Live marketplace</p>
+            <h2 className="buyer-title">Recent scrap</h2>
           </div>
           <Link href="/marketplace" className="buyer-green text-sm font-bold">
             See more
           </Link>
         </div>
         <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {buyerListings.slice(0, 4).map((listing) => (
-            <BuyerListingCard key={listing.id} listing={listing} />
-          ))}
+          {marketplace.page?.listings.slice(0, 4).map(listing => <LiveBuyerListingCard key={listing.id} listing={listing} />)}
         </div>
+        {marketplace.error && <p role="alert" className="buyer-muted mt-4">Live listings are unavailable. Please try again later.</p>}
+        {!marketplace.error && marketplace.page?.listings.length === 0 && <p className="buyer-muted mt-4">No listings are published yet.</p>}
       </section>
       <aside className="mt-10 flex flex-col gap-4 rounded-3xl border border-amber-200 bg-amber-50 p-5 md:flex-row md:items-center md:justify-between">
         <div className="flex gap-3">

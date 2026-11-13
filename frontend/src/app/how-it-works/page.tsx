@@ -21,7 +21,7 @@ const buyerSteps = [
     number: "03",
     title: "Contact the vendor",
     description:
-      "Use the listing contact form to start the conversation. In this prototype, messages are not sent to a server.",
+      "Use the listing contact form to start a conversation stored by ScrapMart.",
   },
   {
     number: "04",
@@ -48,7 +48,7 @@ const vendorSteps = [
     number: "03",
     title: "Manage your listings",
     description:
-      "Review your demo listings from the vendor dashboard.",
+      "Review persisted listings from the vendor dashboard. Publishing requires verification approval and a stored photo.",
   },
   {
     number: "04",
@@ -66,7 +66,7 @@ export default function HowItWorksPage() {
         <Container>
           <PageHeader
             title="How ScrapMart works"
-            description="A marketplace prototype for discovering and listing scrap materials."
+            description="A marketplace for discovering and listing scrap materials."
           />
 
           <section className="mt-10">
@@ -127,13 +127,12 @@ export default function HowItWorksPage() {
 
           <aside className="mt-12 rounded-xl border border-border bg-white p-6">
             <h2 className="text-lg font-bold text-text">
-              Prototype transparency
+              Payment policy
             </h2>
             <p className="mt-2 leading-6 text-muted">
-              This version uses browser-local demo listings. Account creation,
-              identity verification, server messaging, and real transactions
-              are not connected yet. Pay on Delivery is the intended payment
-              policy; do not send advance payments.
+              ScrapMart uses pay on delivery. Orders and messages are stored by
+              the backend when the account services are available. Do not send
+              advance payments.
             </p>
           </aside>
         </Container>

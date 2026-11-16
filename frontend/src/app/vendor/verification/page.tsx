@@ -20,6 +20,10 @@ export default function VendorVerificationPage() {
   const [uploading, setUploading] = useState(false);
   const [identificationType, setIdentificationType] = useState("national_id");
   const [identityFile, setIdentityFile] = useState<File | null>(null);
+  const [phoneCode, setPhoneCode] = useState("");
+  const [phoneBusy, setPhoneBusy] = useState(false);
+  const [phoneMessage, setPhoneMessage] = useState("");
+  const [phoneConfirmed, setPhoneConfirmed] = useState(false);
   useEffect(() => {
     let active = true;
     fetch("/api/auth/vendor/onboarding", { credentials: "same-origin", cache: "no-store" })
@@ -80,6 +84,31 @@ export default function VendorVerificationPage() {
     } catch (error) { setMessage(error instanceof Error ? error.message : "Upload failed."); }
     finally { setUploading(false); }
   }
+  async function phoneRequest(action: "send" | "verify", event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (phoneBusy) return;
+    setPhoneBusy(true);
+    setPhoneMessage("");
+    try {
+      const response = await fetch("/api/auth/phone/" + (action === "send" ? "send-code" : "verify-code"), {
+        method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error",
+        headers: { "Content-Type": "application/json", "X-ScrapMart-CSRF": "1" },
+        body: JSON.stringify(action === "send" ? {} : { code: phoneCode }),
+      });
+      if (action === "send" && response.status === 202) {
+        setPhoneMessage("Code request received. Delivery is not guaranteed. Check your registered phone number.");
+      } else if (action === "verify" && response.status === 204) {
+        setPhoneConfirmed(true);
+        setPhoneCode("");
+        setPhoneMessage("Phone ownership confirmed for this session.");
+      } else {
+        setPhoneMessage(response.status === 400 ? "The code is incorrect or expired." :
+          response.status === 401 ? "Please sign in again." :
+          "Phone verification is unavailable or incomplete.");
+      }
+    } catch { setPhoneMessage("Phone verification is currently unavailable."); }
+    finally { setPhoneBusy(false); }
+  }
   const editable = shop?.verification_status === "pending" || shop?.verification_status === "rejected";
   return (
     <main className="mx-auto max-w-2xl px-5 py-12">
@@ -128,9 +157,34 @@ export default function VendorVerificationPage() {
           </button>
         </form>
       </section>}
+      {shop && <section className="mt-9 rounded-xl border p-5">
+        <h2 className="text-xl font-bold">Verify your phone</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          We use the phone number already registered on your account. It must be in international format (for Nigeria, +234…).
+          A successful code request does not confirm delivery or verify the phone.
+        </p>
+        <form className="mt-5" onSubmit={event => void phoneRequest("send", event)}>
+          <button type="submit" disabled={!editable || phoneBusy}
+            className="rounded-xl border border-green-700 px-5 py-3 font-semibold text-green-700 disabled:opacity-60">
+            Request verification code
+          </button>
+        </form>
+        <form className="mt-5 flex flex-wrap gap-3" onSubmit={event => void phoneRequest("verify", event)}>
+          <label className="grid flex-1 gap-2 text-sm font-semibold">Six-digit SMS code
+            <input value={phoneCode} onChange={event => setPhoneCode(event.target.value)}
+              className="rounded-xl border p-3" inputMode="numeric" autoComplete="one-time-code"
+              maxLength={6} pattern="[0-9]{6}" required disabled={!editable || phoneBusy || phoneConfirmed} />
+          </label>
+          <button type="submit" disabled={!editable || phoneBusy || phoneConfirmed || !/^[0-9]{6}$/.test(phoneCode)}
+            className="self-end rounded-xl bg-green-700 px-5 py-3 font-bold text-white disabled:opacity-60">
+            Confirm code
+          </button>
+        </form>
+        {phoneMessage && <p role="status" className="mt-4 text-sm">{phoneMessage}</p>}
+      </section>}
       {message && <p role="status" className="mt-5 text-sm">{message}</p>}
       <p className="mt-6 text-sm text-slate-600">
-        Phone ownership verification and formal reviewer submission must also be completed before approval.
+        An explicit verification submission and authorized reviewer approval are also required. SMS delivery may be unavailable until staging is configured.
       </p>
       <Link href="/vendor/dashboard?view=profile" className="mt-4 inline-block font-semibold text-green-700 underline">Back to vendor profile</Link>
     </main>

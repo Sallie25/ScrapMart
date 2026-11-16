@@ -87,7 +87,10 @@ export class BackendAuthClient {
         (async () => {
           const response = await this.#transport(request);
           if (response.status === 204) {
-            if (path !== '/logout' && path !== '/vendor/enroll' && path !== '/phone/verify-code' && path !== '/vendor/verification/submit' && !/^\\/verification\\/cases\\/[0-9a-f-]{36}\\/(approve|reject)$/i.test(path)) throw new BackendFailure();
+            if (path !== '/logout' && path !== '/vendor/enroll' && path !== '/phone/verify-code' &&
+                path !== '/vendor/verification/submit' &&
+                !(path.startsWith('/verification/cases/') &&
+                  (path.endsWith('/approve') || path.endsWith('/reject')))) throw new BackendFailure();
             return decode(null, response.headers, started);
           }
           if (response.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() !== 'application/json') throw new BackendFailure();

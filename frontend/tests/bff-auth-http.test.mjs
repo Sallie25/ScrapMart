@@ -661,3 +661,45 @@ test('reviewer access denial remains 403 and does not reveal case metadata', asy
   assert.equal(result.status, 403);
   assert.ok(!(await result.text()).includes('vendor_id'));
 });
+
+test('reviewer approval forwards exact case revision and reason but never client-granted status', async () => {
+  const vendorId = '11111111-2222-4333-8444-555555555555';
+  const payload = { expected_version: 4, expected_evidence_revision: 'sha256-review-evidence',
+    reason: 'Evidence reviewed and matched.' };
+  const f = fixture(async req => {
+    assert.equal(req.url, backendOrigin + '/api/v1/auth/verification/cases/' + vendorId + '/approve');
+    assert.equal(req.method, 'POST');
+    assert.equal(req.headers.get('authorization'), 'Bearer ' + access);
+    assert.equal(req.headers.get('x-scrapmart-csrf'), '1');
+    assert.deepEqual(await req.json(), payload);
+    return new Response(null, { status: 204 });
+  });
+  const id = await seed(f);
+  const result = await f.send('verification/cases/' + vendorId + '/approve', { cookie: id, body: payload });
+  assert.equal(result.status, 200);
+  assert.deepEqual(await result.json(), { decision_recorded: true });
+  assert.equal(f.calls.length, 1);
+});
+
+test('reviewer rejects decisions with client approval flags or missing reasons before backend', async () => {
+  const vendorId = '11111111-2222-4333-8444-555555555555';
+  const f = fixture(() => assert.fail('Malformed reviewer mutation dispatched'));
+  const id = await seed(f);
+  const payload = { expected_version: 4, expected_evidence_revision: 'revision-4', reason: 'Incomplete evidence' };
+  assert.equal((await f.send('verification/cases/' + vendorId + '/reject', { cookie: id,
+    body: { ...payload, verification_status: 'approved' } })).status, 422);
+  assert.equal((await f.send('verification/cases/' + vendorId + '/reject', { cookie: id,
+    body: { ...payload, reason: '    ' } })).status, 422);
+  assert.equal((await f.send('verification/cases/' + vendorId + '/approve', { body: payload })).status, 401);
+  assert.equal(f.calls.length, 0);
+});
+
+test('reviewer decision retains 409 stale evidence without indicating success', async () => {
+  const vendorId = '11111111-2222-4333-8444-555555555555';
+  const f = fixture(() => json({ detail: { code: 'case_conflict' } }, 409));
+  const id = await seed(f);
+  const result = await f.send('verification/cases/' + vendorId + '/approve', { cookie: id,
+    body: { expected_version: 4, expected_evidence_revision: 'revision-4', reason: 'Reviewed evidence' } });
+  assert.equal(result.status, 409);
+  assert.equal((await result.json()).detail.code, 'case_changed');
+});

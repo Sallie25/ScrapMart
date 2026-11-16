@@ -53,7 +53,7 @@ export default async function SignupPage({
               Log in
             </Link>
           </p>
-          {vendor && <p className="auth-muted mt-3 text-center text-sm">Already a buyer? Sign in to your existing account. You do not need a second email address.</p>}
+          {vendor && <p className="auth-muted mt-3 text-center text-sm">Already a buyer? <Link href="/vendor/enroll" className="auth-green font-bold underline">Add vendor access to your existing account</Link>. No second email address is needed.</p>}
           <p className="auth-muted mt-3 text-center text-sm">
             {vendor ? "Want to buy instead?" : "Want to sell instead?"}{" "}
             <Link

@@ -161,6 +161,18 @@ export class BackendAuthClient {
       throw new BackendFailure();
     } finally { clearTimeout(timeout); controller.abort(); }
   }
+  reviewCases(bearer: string, status: 'pending' | 'approved' | 'rejected' | 'suspended', limit: number) {
+    return this.#call('/verification/cases?status=' + status + '&limit=' + limit, 'GET', value => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new BackendFailure();
+      return value;
+    }, { bearer });
+  }
+  reviewCase(bearer: string, id: string) {
+    return this.#call('/verification/cases/' + encodeURIComponent(id), 'GET', value => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new BackendFailure();
+      return value;
+    }, { bearer });
+  }
   submitVendorVerification(bearer: string): Promise<void> {
     return this.#call('/vendor/verification/submit', 'POST', value => {
       if (value !== null && (typeof value !== 'object' || Array.isArray(value))) throw new BackendFailure();

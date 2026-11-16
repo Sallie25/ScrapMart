@@ -112,15 +112,21 @@ export function createBffHandlers(dependencies?: { store: SessionStore; backend:
         if (request.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() !== 'application/json')
           return authError(415, 'json_required');
         const input = await boundedJson(request.body, AbortSignal.any([request.signal, AbortSignal.timeout(5000)]));
-        const result = (phoneSend ? z.object({}).strict() : z.object({ code: z.string().regex(/^\\d{6}$/) }).strict()).safeParse(input);
-        if (!result.success) return authError(422, 'validation_error');
+        let verifiedCode: string | undefined;
+        if (phoneSend) {
+          if (!z.object({}).strict().safeParse(input).success) return authError(422, 'validation_error');
+        } else {
+          const parsed = z.object({ code: z.string().regex(/^[0-9]{6}$/) }).strict().safeParse(input);
+          if (!parsed.success) return authError(422, 'validation_error');
+          verifiedCode = parsed.data.code;
+        }
         try {
           return await store.withAccess(id, async access => {
             if (phoneSend) {
               await backend.sendPhoneVerificationCode(access);
               return response({ message: 'If a code can be sent, delivery will be attempted.' }, 202);
             }
-            await backend.verifyPhoneCode(access, (result.data as { code: string }).code);
+            await backend.verifyPhoneCode(access, verifiedCode!);
             return response(null, 204);
           });
         } catch (error) {

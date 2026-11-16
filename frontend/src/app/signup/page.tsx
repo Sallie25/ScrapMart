@@ -21,19 +21,19 @@ export default async function SignupPage({
           </span>
           <h2 className="auth-display mt-7 text-4xl font-extrabold">
             {vendor
-              ? "Set up your shop and reach buyers."
+              ? "Create your account to start selling."
               : "Start finding scrap near you."}
           </h2>
           <p className="mt-4 text-slate-300">
             {vendor
-              ? "Vendor identity review is planned to help keep ScrapMart safe for everyone."
+              ? "Complete shop details and identity verification after registration."
               : "Discover local materials and always pay on delivery."}
           </p>
           <div className="mt-10 rounded-2xl bg-white/10 p-5">
             <p className="text-sm font-bold text-[#74d99b]">Safety first</p>
             <p className="mt-2 text-sm leading-relaxed text-slate-300">
               {vendor
-                ? "Identification upload and review are not connected. Do not submit identity documents in this demo."
+                ? "Identity documents are collected later during secure verification, not on this page."
                 : "Registration uses ScrapMart authentication when the service is available."}
             </p>
           </div>
@@ -44,7 +44,7 @@ export default async function SignupPage({
             Create {role} account
           </h1>
           <p className="auth-muted mt-2 text-sm">
-            {vendor ? "Fill in the required details to preview registration." : "Fill in the required details to create a Buyer account."}
+            {vendor ? "Create a vendor account, then complete shop verification." : "Fill in the required details to create a Buyer account."}
           </p>
           <SignupForm key={role} role={role} />
           <p className="auth-muted mt-5 text-center text-sm">
@@ -53,6 +53,7 @@ export default async function SignupPage({
               Log in
             </Link>
           </p>
+          {vendor && <p className="auth-muted mt-3 text-center text-sm">Already a buyer? Sign in to your existing account. You do not need a second email address.</p>}
           <p className="auth-muted mt-3 text-center text-sm">
             {vendor ? "Want to buy instead?" : "Want to sell instead?"}{" "}
             <Link

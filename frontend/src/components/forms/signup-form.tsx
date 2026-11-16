@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { createBuyerAuthClient } from "@/lib/buyer-auth";
+import { createVendorAuthClient } from "@/lib/vendor-auth";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -18,11 +19,11 @@ const buyerFormSchema = buyerSignupSchema.extend({ previewConsent: z.boolean().r
 
 export function SignupForm({ role }: { role: "buyer" | "vendor" }) {
   const vendor = role === "vendor";
-  const [submitted, setSubmitted] = useState(false);
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<{ message: string; accepted: boolean } | null>(null);
   const inFlight = useRef(false);
   const client = useRef(createBuyerAuthClient());
+  const vendorClient = useRef(createVendorAuthClient());
   const [showPassword, setShowPassword] = useState(false);
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(vendor ? vendorSignupSchema : buyerFormSchema),
@@ -33,7 +34,7 @@ export function SignupForm({ role }: { role: "buyer" | "vendor" }) {
       password: "",
       previewConsent: false,
       ...(vendor
-        ? { businessName: "", businessLocation: "", businessAddress: "" }
+        ? { businessName: "" }
         : {}),
     },
   });
@@ -42,10 +43,10 @@ export function SignupForm({ role }: { role: "buyer" | "vendor" }) {
     if (inFlight.current) return;
     inFlight.current = true; setPending(true); setResult(null);
     try {
-      const outcome = await client.current.signup(values);
+      const outcome = vendor ? await vendorClient.current.signup(vendorSignupSchema.parse(values)) : await client.current.signup(buyerSignupSchema.parse(values));
       if (outcome.status === "accepted") form.resetField("password");
       else for (const field of outcome.fields ?? []) {
-        const name = { full_name: "fullName", phone_number: "phone", email: "email", password: "password" }[field] as "fullName" | "phone" | "email" | "password" | undefined;
+        const name = { full_name: "fullName", phone_number: "phone", email: "email", password: "password", business_name: "businessName" }[field] as "fullName" | "phone" | "email" | "password" | "businessName" | undefined;
         if (name) form.setError(name, { message: `Check ${name === "fullName" ? "full name" : name === "phone" ? "phone number" : name}.` });
       }
       setResult({ message: outcome.message, accepted: outcome.status === "accepted" });
@@ -55,15 +56,15 @@ export function SignupForm({ role }: { role: "buyer" | "vendor" }) {
     getFieldState(name, formState).error?.message;
   return (
     <form
-      onChange={() => { setSubmitted(false); setResult(null); }}
-      onSubmit={event => { void handleSubmit(vendor ? async () => { setSubmitted(true); form.resetField("password"); } : submitBuyer)(event); }}
+      onChange={() => { setResult(null); }}
+      onSubmit={event => { void handleSubmit(submitBuyer)(event); }}
       className="mt-7"
       noValidate
     >
       <p
-        className={`auth-muted mb-5 text-xs leading-relaxed ${vendor ? "sr-only" : ""}`}
+        className="auth-muted mb-5 text-xs leading-relaxed"
       >
-        {vendor ? "Demo only · Details are validated in this form and are not sent or stored. No account or OTP is created." : "Submit your details through ScrapMart authentication. Registration may be unavailable until the service is activated."}
+        Submit your details through ScrapMart authentication. Registration may be unavailable until the service is activated.
       </p>
       <div className="grid gap-4 md:grid-cols-2">
         <AuthField
@@ -136,75 +137,15 @@ export function SignupForm({ role }: { role: "buyer" | "vendor" }) {
               error={fieldError("businessName")}
               {...register("businessName")}
             />
-            <AuthField
-              id="signup-business-location"
-              label="Shop location"
-              placeholder="Ikeja, Lagos"
-              autoComplete="address-level2"
-              required
-              error={fieldError("businessLocation")}
-              {...register("businessLocation")}
-            />
-            <div className="md:col-span-2">
-              <AuthField
-                id="signup-business-address"
-                label="Shop address"
-                placeholder="Computer Village area, Ikeja"
-                autoComplete="street-address"
-                required
-                error={fieldError("businessAddress")}
-                {...register("businessAddress")}
-              />
-            </div>
-            <div>
-              <label htmlFor="identification-type" className="mb-2 block">
-                Identification type
-              </label>
-              <select
-                id="identification-type"
-                disabled
-                aria-describedby="identity-demo"
-              >
-                <option>National ID</option>
-                <option>Driver&apos;s Licence</option>
-                <option>International Passport</option>
-                <option>Voter&apos;s Card</option>
-              </select>
-            </div>
-            <div>
-              <label htmlFor="identification-document" className="mb-2 block">
-                Identification upload
-              </label>
-              <label className="auth-upload flex min-h-12 items-center gap-3 rounded-xl px-4 opacity-65">
-                <AuthIcon name="upload" />
-                <span>Upload unavailable</span>
-                <input
-                  id="identification-document"
-                  type="file"
-                  className="sr-only"
-                  disabled
-                  aria-describedby="identity-demo"
-                />
-              </label>
-            </div>
           </>
         )}
       </div>
       <p
-        className={`auth-helper mt-4 text-xs leading-relaxed ${vendor ? "sr-only" : ""}`}
+        className="auth-helper mt-4 text-xs leading-relaxed"
       >
         Passwords are checked against the backend signup rules without trimming
-        or changing them. {vendor ? "This is a demo; use a sample password, not a real one." : "Your password is sent only to the same-origin authentication route."}
+        or changing them. Your password is sent only to the same-origin authentication route.
       </p>
-      {vendor && (
-        <p
-          id="identity-demo"
-          className="auth-helper mt-3 text-xs leading-relaxed"
-        >
-          ID upload and review are unavailable. Shop details are a separate
-          onboarding step; nothing is sent or stored here.
-        </p>
-      )}
       <label className="auth-muted mt-5 flex cursor-pointer items-start gap-3 text-sm font-medium">
         <input
           type="checkbox"
@@ -218,15 +159,7 @@ export function SignupForm({ role }: { role: "buyer" | "vendor" }) {
           {...register("previewConsent")}
         />
         <span>
-          {vendor ? (
-            <>
-              I understand this is a demo.{" "}
-              <strong>Terms and Privacy Policy</strong> are not connected; no
-              account will be created.
-            </>
-          ) : (
-            "I understand registration is only confirmed by the authentication service."
-          )}
+          I understand registration is only confirmed by the authentication service.
         </span>
       </label>
       {fieldError("previewConsent") && (
@@ -240,34 +173,14 @@ export function SignupForm({ role }: { role: "buyer" | "vendor" }) {
       )}
       <p
         id="preview-terms"
-        className={`auth-helper mt-2 text-xs ${vendor ? "sr-only" : ""}`}
+        className="auth-helper mt-2 text-xs"
       >
         Terms and Privacy Policy pages are not available yet.
       </p>
       <Button type="submit" block className="auth-button mt-6" disabled={pending} loading={pending}>
-        {vendor ? "Create account (demo)" : pending ? "Submitting…" : "Create buyer account"}
+        {pending ? "Submitting…" : vendor ? "Create vendor account" : "Create buyer account"}
       </Button>
       {result && <section role={result.accepted ? "status" : "alert"} className="auth-status mt-5"><p>{result.message}</p></section>}
-      {submitted && (
-        <section role="status" className="auth-status mt-5">
-          <h2 className="auth-display font-extrabold">
-            Registration preview completed
-          </h2>
-          <p>
-            No account was created and no data was sent.{" "}
-            {vendor
-              ? "Identity review remains required; you are not verified or approved."
-              : "No verification code was sent."}
-          </p>
-          <button
-            type="button"
-            className="auth-green mt-3 text-sm font-bold underline"
-            onClick={() => setSubmitted(false)}
-          >
-            Continue editing
-          </button>
-        </section>
-      )}
     </form>
   );
 }

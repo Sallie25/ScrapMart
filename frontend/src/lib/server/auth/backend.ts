@@ -87,7 +87,7 @@ export class BackendAuthClient {
         (async () => {
           const response = await this.#transport(request);
           if (response.status === 204) {
-            if (path !== '/logout' && path !== '/vendor/enroll' && path !== '/phone/verify-code') throw new BackendFailure();
+            if (path !== '/logout' && path !== '/vendor/enroll' && path !== '/phone/verify-code' && path !== '/vendor/verification/submit') throw new BackendFailure();
             return decode(null, response.headers, started);
           }
           if (response.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() !== 'application/json') throw new BackendFailure();
@@ -100,7 +100,7 @@ export class BackendAuthClient {
             throw new BackendFailure([400,401,403,413,415,422,429,503].includes(response.status) ? response.status : 502,
               retry && /^\d{1,5}$/.test(retry) ? retry : undefined, fields);
           }
-          if (response.status !== ((path === '/logout' || path === '/vendor/enroll' || path === '/phone/verify-code') ? 204 : (path.endsWith('/signup') || path === '/phone/send-code') ? 202 : 200)) throw new BackendFailure();
+          if (response.status !== ((path === '/logout' || path === '/vendor/enroll' || path === '/phone/verify-code' || path === '/vendor/verification/submit') ? 204 : (path.endsWith('/signup') || path === '/phone/send-code') ? 202 : 200)) throw new BackendFailure();
           return decode(body, response.headers, started);
         })(),
         new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new BackendFailure()); }, this.#timeout); }),
@@ -160,6 +160,11 @@ export class BackendAuthClient {
       if (error instanceof BackendFailure) throw error;
       throw new BackendFailure();
     } finally { clearTimeout(timeout); controller.abort(); }
+  }
+  submitVendorVerification(bearer: string): Promise<void> {
+    return this.#call('/vendor/verification/submit', 'POST', value => {
+      if (value !== null && (typeof value !== 'object' || Array.isArray(value))) throw new BackendFailure();
+    }, { bearer, body: {} });
   }
   sendPhoneVerificationCode(bearer: string): Promise<void> {
     return this.#call('/phone/send-code', 'POST', () => undefined, { bearer, body: {} });

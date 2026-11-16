@@ -53,8 +53,9 @@ export function createBffHandlers(dependencies?: { store: SessionStore; backend:
     const identityUpload = path === 'vendor/identity-document';
     const phoneSend = path === 'phone/send-code';
     const phoneVerify = path === 'phone/verify-code';
+    const reviewSubmission = path === 'vendor/verification/submit';
     const read = path === 'session' || path === 'vendor/status';
-    if (!registration && !signingIn && !enrolling && !onboarding && !identityUpload && !phoneSend && !phoneVerify && !read && path !== 'refresh' && path !== 'logout') return authError(404, 'not_found');
+    if (!registration && !signingIn && !enrolling && !onboarding && !identityUpload && !phoneSend && !phoneVerify && !reviewSubmission && !read && path !== 'refresh' && path !== 'logout') return authError(404, 'not_found');
     if (onboarding ? !['GET', 'PATCH'].includes(request.method) : request.method !== (read ? 'GET' : 'POST')) return authError(405, 'method_not_allowed');
     if (!dependencies || !origin) return authError(503, 'authentication_disabled');
     const { store, backend } = dependencies;
@@ -64,7 +65,7 @@ export function createBffHandlers(dependencies?: { store: SessionStore; backend:
       return authError(403, 'origin_or_csrf_rejected');
     }
     try {
-      if (!read && !registration && !signingIn && !enrolling && !onboarding && !identityUpload && !phoneSend && !phoneVerify && request.body) {
+      if (!read && !registration && !signingIn && !enrolling && !onboarding && !identityUpload && !phoneSend && !phoneVerify && !reviewSubmission && request.body) {
         void request.body.cancel().catch(() => {});
         return authError(400, 'body_not_allowed');
       }
@@ -108,6 +109,22 @@ export function createBffHandlers(dependencies?: { store: SessionStore; backend:
       if (!id) return cookie(authError(401, 'session_required'));
       const metadata = await store.lookup(id); // Any storage error propagates as 503.
       if (!metadata) return cookie(authError(401, 'session_required'));
+      if (reviewSubmission) {
+        if (request.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() !== 'application/json')
+          return authError(415, 'json_required');
+        const input = await boundedJson(request.body, AbortSignal.any([request.signal, AbortSignal.timeout(5000)]));
+        if (!z.object({}).strict().safeParse(input).success) return authError(422, 'validation_error');
+        try {
+          return await store.withAccess(id, async access => {
+            await backend.submitVendorVerification(access);
+            return response({ submitted_for_review: true });
+          });
+        } catch (error) {
+          if (error instanceof SessionAccessExpired) return authError(401, 'session_refresh_required');
+          if (error instanceof BackendFailure && error.status === 401) return authError(401, 'session_refresh_required');
+          return backendError(error);
+        }
+      }
       if (phoneSend || phoneVerify) {
         if (request.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() !== 'application/json')
           return authError(415, 'json_required');

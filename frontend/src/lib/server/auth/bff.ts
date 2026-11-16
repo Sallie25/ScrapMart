@@ -123,7 +123,8 @@ export function createBffHandlers(dependencies?: { store: SessionStore; backend:
         const parsed = z.object({
           expected_version: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
           expected_evidence_revision: z.string().min(1).max(256),
-          reason: z.string().min(1).max(500).refine(value => value.trim().length > 0 && !/[\\u0000-\\u001f\\u007f]/.test(value)),
+          reason: z.string().min(1).max(500).refine(value => value.trim().length > 0 &&
+            ![...value].some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)),
         }).strict().safeParse(input);
         if (!parsed.success) return authError(422, 'validation_error');
         try {

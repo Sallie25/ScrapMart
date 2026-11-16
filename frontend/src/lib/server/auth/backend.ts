@@ -133,6 +133,34 @@ export class BackendAuthClient {
       if (value !== null) throw new BackendFailure();
     }, { bearer, body });
   }
+  async uploadIdentityDocument(bearer: string, kind: string, bytes: Uint8Array, mediaType: string): Promise<void> {
+    if (!['national_id', 'passport', 'drivers_license', 'voter_id'].includes(kind) ||
+        !['image/jpeg', 'image/png'].includes(mediaType) ||
+        bytes.byteLength < 1 || bytes.byteLength > 3 * 1024 * 1024) throw new BackendFailure(422);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const headers = new Headers({
+        Origin: this.#browserOrigin, 'X-ScrapMart-CSRF': '1',
+        'Content-Type': mediaType, Authorization: `Bearer ${bearer}`,
+      });
+      const request = new Request(
+        this.#origin + '/api/v1/auth/vendor/identity-document?identification_type=' + encodeURIComponent(kind),
+        { method: 'POST', headers, body: Buffer.from(bytes), signal: controller.signal,
+          redirect: 'error', credentials: 'omit', cache: 'no-store' },
+      );
+      const result = await this.#transport(request);
+      if (result.status === 200 || result.status === 201 || result.status === 204) {
+        await result.body?.cancel();
+        return;
+      }
+      await result.body?.cancel();
+      throw new BackendFailure([400,401,403,413,415,422,429,503].includes(result.status) ? result.status : 502);
+    } catch (error) {
+      if (error instanceof BackendFailure) throw error;
+      throw new BackendFailure();
+    } finally { clearTimeout(timeout); controller.abort(); }
+  }
   getVendorOnboarding(bearer: string) {
     return this.#call('/vendor/onboarding', 'GET', value => {
       const parsed = vendorOnboarding.safeParse(value);

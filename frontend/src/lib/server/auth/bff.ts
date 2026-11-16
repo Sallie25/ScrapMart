@@ -5,6 +5,7 @@ import type { Role } from './contracts';
 import { hashIdentifier } from '../sessions/crypto';
 import { browserSessionCookie } from '../sessions/index';
 import type { SessionStore } from '../sessions/store';
+import { SessionAccessExpired } from '../sessions/store';
 
 const headers = { 'Cache-Control': 'no-store', 'Vary': 'Cookie', 'X-Content-Type-Options': 'nosniff' };
 function response(body: unknown, status = 200): Response {
@@ -124,6 +125,7 @@ export function createBffHandlers(dependencies?: { store: SessionStore; backend:
           response({ authenticated: true, capabilities: await backend.capabilities(access), expires_at: metadata.expiresAt.toISOString() }) :
           response(await backend.vendorStatus(access)));
       } catch (error) {
+        if (error instanceof SessionAccessExpired) return authError(401, 'session_refresh_required');
         if (error instanceof BackendFailure && error.status === 401) return authError(401, 'session_refresh_required');
         return backendError(error);
       }

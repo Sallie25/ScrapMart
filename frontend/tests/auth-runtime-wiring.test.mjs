@@ -78,6 +78,7 @@ test('Buyer guard requires a live Buyer capability and a future expiry', async (
     assert.equal(await buyerSessionDecision('cookie', async () => Response.json(body)), 'login');
   }
   assert.equal(await buyerSessionDecision('cookie', async () => response('session_required', 401)), 'login');
+  assert.equal(await buyerSessionDecision('cookie', async () => response('session_refresh_required', 401)), 'refresh');
   assert.equal(await buyerSessionDecision('cookie', async () => response('authentication_disabled', 503)), 'unavailable');
   assert.equal(await buyerSessionDecision('cookie', async () => { throw new Error('offline'); }), 'unavailable');
 });

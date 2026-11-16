@@ -5,6 +5,8 @@ import type { Credentials, Envelope } from './crypto';
 import { OwnedSessionDatabase } from './database';
 import type { SessionConnectionSettings } from './database';
 
+export class SessionAccessExpired extends SessionError {}
+
 // No timers, process-local locks, automatic retries or recoverable refresh leases.
 // A private pool commits the claim before upstream dispatch. Completion rotates
 // browser identifiers atomically; an ambiguous commit cannot reactivate the old ID.
@@ -48,7 +50,7 @@ export class SessionStore {
       AND root.revoked_at IS NULL AND root.expires_at > clock_timestamp()`, [hash]);
     if (rows.length !== 1) throw new SessionError();
     const credentials = this.#vault.open(hash, rows[0].envelope as Envelope);
-    if (Date.parse(credentials.accessExpiresAt) <= Date.now()) throw new SessionError();
+    if (Date.parse(credentials.accessExpiresAt) <= Date.now()) throw new SessionAccessExpired();
     return consume(credentials.accessToken);
   }
   async revoke(identifier: string): Promise<void> {

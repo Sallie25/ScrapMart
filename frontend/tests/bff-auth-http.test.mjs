@@ -367,7 +367,8 @@ test('expired access credentials do not trigger implicit refresh on session disc
   const id = await f.store.create({ accessToken: access, refreshCookie: f.refresh,
     accessExpiresAt: new Date(0).toISOString() }, f.expires);
   const result = await f.send('session', { method: 'GET', cookie: id });
-  assert.equal(result.status, 503); assert.equal(f.calls.length, 0); assert.ok(await f.store.lookup(id));
+  assert.equal(result.status, 401); assert.equal((await result.json()).detail.code, 'session_refresh_required');
+  assert.equal(f.calls.length, 0); assert.ok(await f.store.lookup(id));
 });
 
 test('unknown Vendor status cannot become an approval or capability grant', async () => {

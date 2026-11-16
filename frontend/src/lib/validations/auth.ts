@@ -54,13 +54,10 @@ const commonSignupFields = {
     .refine(Boolean, "Confirm that you understand this is a demo"),
 };
 export const buyerSignupSchema = z.object(commonSignupFields);
+// Vendor registration requires a business name in the current backend contract.
+// Location, address, and identity evidence belong to the later verification flow.
 export const vendorSignupSchema = buyerSignupSchema.extend({
   businessName: z.string().trim().min(2, "Enter your shop or business name"),
-  businessLocation: z.string().trim().min(2, "Enter your shop location"),
-  businessAddress: z
-    .string()
-    .trim()
-    .min(5, "Enter a more complete shop address"),
 });
 export type BuyerSignupValues = z.infer<typeof buyerSignupSchema>;
 export type VendorSignupValues = z.infer<typeof vendorSignupSchema>;

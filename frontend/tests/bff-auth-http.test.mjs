@@ -503,3 +503,48 @@ test('vendor enrollment rejects malformed fields before backend dispatch', async
     body: { business_name: '', current_password: password, verification_status: 'approved' } })).status, 422);
   assert.equal(f.calls.length, 0);
 });
+
+test('vendor identity upload forwards private image bytes with bearer and no public storage key', async () => {
+  const image = Uint8Array.from([255, 216, 255, 217]);
+  const f = fixture(async req => {
+    assert.equal(new URL(req.url).pathname, '/api/v1/auth/vendor/identity-document');
+    assert.equal(new URL(req.url).searchParams.get('identification_type'), 'national_id');
+    assert.equal(req.headers.get('authorization'), 'Bearer ' + access);
+    assert.equal(req.headers.get('content-type'), 'image/jpeg');
+    assert.equal(req.headers.get('x-scrapmart-csrf'), '1');
+    assert.deepEqual(new Uint8Array(await req.arrayBuffer()), image);
+    return json({ document_status: 'submitted' });
+  });
+  const id = await seed(f);
+  const request = new Request(origin + '/api/auth/vendor/identity-document?identification_type=national_id', {
+    method: 'POST', headers: {
+      Origin: origin, 'X-ScrapMart-CSRF': '1', 'Content-Type': 'image/jpeg',
+      Cookie: '__Host-scrapmart_session=' + id,
+    }, body: image,
+  });
+  const result = await createBffHandlers({ store: f.store, backend: f.backend, browserOrigin: origin })(
+    request, ['vendor', 'identity-document']);
+  assert.equal(result.status, 200);
+  assert.deepEqual(await result.json(), { submitted: true });
+  assert.equal(f.calls.length, 1);
+});
+
+test('vendor identity upload rejects unsupported content and invalid type before dispatch', async () => {
+  const f = fixture(() => assert.fail('Invalid upload reached backend'));
+  const id = await seed(f);
+  for (const [type, kind, status] of [
+    ['application/pdf', 'national_id', 415],
+    ['image/png', 'unlisted', 422],
+  ]) {
+    const req = new Request(origin + '/api/auth/vendor/identity-document?identification_type=' + kind, {
+      method: 'POST',
+      headers: { Origin: origin, 'X-ScrapMart-CSRF': '1', 'Content-Type': type,
+        Cookie: '__Host-scrapmart_session=' + id },
+      body: Uint8Array.of(1, 2, 3),
+    });
+    const result = await createBffHandlers({ store: f.store, backend: f.backend, browserOrigin: origin })(
+      req, ['vendor', 'identity-document']);
+    assert.equal(result.status, status);
+  }
+  assert.equal(f.calls.length, 0);
+});

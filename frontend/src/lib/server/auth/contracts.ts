@@ -18,6 +18,10 @@ const email = z.string().refine(value => [...value].every(c => c.charCodeAt(0) <
 export const buyerRegistration = z.object({ email, password: buyerSignupSchema.shape.password,
   full_name: text(150), phone_number: text(20).nullable().optional() }).strict();
 export const vendorRegistration = buyerRegistration.extend({ business_name: text(200) }).strict();
+export const vendorEnrollment = z.object({
+  business_name: text(200),
+  current_password: loginSchema.shape.password,
+}).strict();
 export const login = z.object({ email, password: loginSchema.shape.password }).strict();
 export const acknowledgment = 'If registration was successful, you can now sign in.';
 export const verificationStatus = z.enum(['pending', 'approved', 'rejected', 'suspended']);

@@ -611,3 +611,53 @@ test('verification review submission rejects client approval or arbitrary eviden
   assert.equal((await f.send('vendor/verification/submit', { body: {} })).status, 401);
   assert.equal(f.calls.length, 0);
 });
+
+test('review queue requires session and forwards only constrained filters', async () => {
+  const f = fixture(async req => {
+    assert.equal(req.url, backendOrigin + '/api/v1/auth/verification/cases?status=pending&limit=25');
+    assert.equal(req.method, 'GET');
+    assert.equal(req.headers.get('authorization'), 'Bearer ' + access);
+    return json({ cases: [] });
+  });
+  assert.equal((await f.send('verification/cases', { method: 'GET' })).status, 401);
+  const id = await seed(f);
+  const result = await f.send('verification/cases', { method: 'GET', cookie: id });
+  assert.equal(result.status, 200);
+  assert.deepEqual(await result.json(), { cases: [] });
+  assert.equal(f.calls.length, 1);
+});
+
+test('review queue rejects unsupported filters before backend request', async () => {
+  const f = fixture(() => assert.fail('Invalid reviewer query reached backend'));
+  const id = await seed(f);
+  const request = new Request(origin + '/api/auth/verification/cases?status=pending&limit=999&role=admin', {
+    headers: { Cookie: '__Host-scrapmart_session=' + id },
+  });
+  const result = await createBffHandlers({ store: f.store, backend: f.backend, browserOrigin: origin })(
+    request, ['verification', 'cases']);
+  assert.equal(result.status, 422);
+  assert.equal(f.calls.length, 0);
+});
+
+test('review case request only forwards a constrained UUID and authenticated bearer', async () => {
+  const vendorId = '11111111-2222-4333-8444-555555555555';
+  const f = fixture(async req => {
+    assert.equal(req.url, backendOrigin + '/api/v1/auth/verification/cases/' + vendorId);
+    assert.equal(req.headers.get('authorization'), 'Bearer ' + access);
+    return json({ vendor_id: vendorId, status: 'pending', version: 1 });
+  });
+  const id = await seed(f);
+  const result = await f.send('verification/cases/' + vendorId, { method: 'GET', cookie: id });
+  assert.equal(result.status, 200);
+  assert.equal((await result.json()).vendor_id, vendorId);
+  assert.equal((await f.send('verification/cases/not-an-id', { method: 'GET', cookie: id })).status, 404);
+  assert.equal(f.calls.length, 1);
+});
+
+test('reviewer access denial remains 403 and does not reveal case metadata', async () => {
+  const f = fixture(() => json({ detail: { code: 'forbidden' } }, 403));
+  const id = await seed(f);
+  const result = await f.send('verification/cases', { method: 'GET', cookie: id });
+  assert.equal(result.status, 403);
+  assert.ok(!(await result.text()).includes('vendor_id'));
+});

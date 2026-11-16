@@ -24,6 +24,9 @@ export default function VendorVerificationPage() {
   const [phoneBusy, setPhoneBusy] = useState(false);
   const [phoneMessage, setPhoneMessage] = useState("");
   const [phoneConfirmed, setPhoneConfirmed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submittedForReview, setSubmittedForReview] = useState(false);
+  const [submissionMessage, setSubmissionMessage] = useState("");
   useEffect(() => {
     let active = true;
     fetch("/api/auth/vendor/onboarding", { credentials: "same-origin", cache: "no-store" })
@@ -109,6 +112,30 @@ export default function VendorVerificationPage() {
     } catch { setPhoneMessage("Phone verification is currently unavailable."); }
     finally { setPhoneBusy(false); }
   }
+  async function submitVerification() {
+    if (submitting || submittedForReview) return;
+    setSubmitting(true);
+    setSubmissionMessage("");
+    try {
+      const response = await fetch("/api/auth/vendor/verification/submit", {
+        method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error",
+        headers: { "Content-Type": "application/json", "X-ScrapMart-CSRF": "1" },
+        body: JSON.stringify({}),
+      });
+      if (response.ok) {
+        const value: unknown = await response.json();
+        if (typeof value !== "object" || value === null || !("submitted_for_review" in value) ||
+            value.submitted_for_review !== true) throw new Error("Submission response could not be confirmed.");
+        setSubmittedForReview(true);
+        setSubmissionMessage("Verification submitted for manual review. Your account is not approved yet.");
+      } else {
+        setSubmissionMessage(response.status === 401 ? "Please sign in again." :
+          response.status === 403 ? "Your account is not permitted to submit verification." :
+          "Submission was not accepted. Check that shop details, an identity document, and verified phone ownership are complete.");
+      }
+    } catch { setSubmissionMessage("Verification submission could not be confirmed. Check your status before retrying."); }
+    finally { setSubmitting(false); }
+  }
   const editable = shop?.verification_status === "pending" || shop?.verification_status === "rejected";
   return (
     <main className="mx-auto max-w-2xl px-5 py-12">
@@ -181,6 +208,19 @@ export default function VendorVerificationPage() {
           </button>
         </form>
         {phoneMessage && <p role="status" className="mt-4 text-sm">{phoneMessage}</p>}
+      </section>}
+      {shop && <section className="mt-9 rounded-xl border p-5">
+        <h2 className="text-xl font-bold">Submit for manual review</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          Before submitting, save your shop details, upload your identity image, and verify your registered phone.
+          The backend checks all evidence again. Submission does not grant permission to sell.
+        </p>
+        <button type="button" disabled={!editable || submitting || submittedForReview}
+          onClick={() => void submitVerification()}
+          className="mt-5 rounded-xl bg-green-700 px-5 py-3 font-bold text-white disabled:opacity-60">
+          {submitting ? "Submitting…" : submittedForReview ? "Submitted for review" : "Submit verification for review"}
+        </button>
+        {submissionMessage && <p className="mt-4 text-sm" role="status">{submissionMessage}</p>}
       </section>}
       {message && <p role="status" className="mt-5 text-sm">{message}</p>}
       <p className="mt-6 text-sm text-slate-600">

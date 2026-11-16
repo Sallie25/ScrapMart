@@ -1,4 +1,5 @@
 import 'server-only';
+import { z } from 'zod';
 import { BackendAuthClient, BackendFailure, boundedJson, exactHttpsOrigin } from './backend';
 import { buyerRegistration, vendorRegistration, vendorEnrollment, vendorOnboardingPatch, login, acknowledgment, safeFields } from './contracts';
 import type { Role } from './contracts';
@@ -50,8 +51,10 @@ export function createBffHandlers(dependencies?: { store: SessionStore; backend:
     const enrolling = path === 'vendor/enroll';
     const onboarding = path === 'vendor/onboarding';
     const identityUpload = path === 'vendor/identity-document';
+    const phoneSend = path === 'phone/send-code';
+    const phoneVerify = path === 'phone/verify-code';
     const read = path === 'session' || path === 'vendor/status';
-    if (!registration && !signingIn && !enrolling && !onboarding && !identityUpload && !read && path !== 'refresh' && path !== 'logout') return authError(404, 'not_found');
+    if (!registration && !signingIn && !enrolling && !onboarding && !identityUpload && !phoneSend && !phoneVerify && !read && path !== 'refresh' && path !== 'logout') return authError(404, 'not_found');
     if (onboarding ? !['GET', 'PATCH'].includes(request.method) : request.method !== (read ? 'GET' : 'POST')) return authError(405, 'method_not_allowed');
     if (!dependencies || !origin) return authError(503, 'authentication_disabled');
     const { store, backend } = dependencies;
@@ -61,7 +64,7 @@ export function createBffHandlers(dependencies?: { store: SessionStore; backend:
       return authError(403, 'origin_or_csrf_rejected');
     }
     try {
-      if (!read && !registration && !signingIn && !enrolling && !onboarding && !identityUpload && request.body) {
+      if (!read && !registration && !signingIn && !enrolling && !onboarding && !identityUpload && !phoneSend && !phoneVerify && request.body) {
         void request.body.cancel().catch(() => {});
         return authError(400, 'body_not_allowed');
       }
@@ -105,6 +108,28 @@ export function createBffHandlers(dependencies?: { store: SessionStore; backend:
       if (!id) return cookie(authError(401, 'session_required'));
       const metadata = await store.lookup(id); // Any storage error propagates as 503.
       if (!metadata) return cookie(authError(401, 'session_required'));
+      if (phoneSend || phoneVerify) {
+        if (request.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() !== 'application/json')
+          return authError(415, 'json_required');
+        const input = await boundedJson(request.body, AbortSignal.any([request.signal, AbortSignal.timeout(5000)]));
+        const result = (phoneSend ? z.object({}).strict() : z.object({ code: z.string().regex(/^\\d{6}$/) }).strict()).safeParse(input);
+        if (!result.success) return authError(422, 'validation_error');
+        try {
+          return await store.withAccess(id, async access => {
+            if (phoneSend) {
+              await backend.sendPhoneVerificationCode(access);
+              return response({ message: 'If a code can be sent, delivery will be attempted.' }, 202);
+            }
+            await backend.verifyPhoneCode(access, (result.data as { code: string }).code);
+            return response(null, 204);
+          });
+        } catch (error) {
+          if (error instanceof SessionAccessExpired) return authError(401, 'session_refresh_required');
+          if (error instanceof BackendFailure && error.status === 401) return authError(401, 'session_refresh_required');
+          if (error instanceof BackendFailure && error.status === 400) return authError(400, 'invalid_code');
+          return backendError(error);
+        }
+      }
       if (identityUpload) {
         const identificationType = new URL(request.url).searchParams;
         const keys = [...identificationType.keys()];

@@ -87,7 +87,7 @@ export class BackendAuthClient {
         (async () => {
           const response = await this.#transport(request);
           if (response.status === 204) {
-            if (path !== '/logout' && path !== '/vendor/enroll' && path !== '/phone/verify-code' && path !== '/vendor/verification/submit') throw new BackendFailure();
+            if (path !== '/logout' && path !== '/vendor/enroll' && path !== '/phone/verify-code' && path !== '/vendor/verification/submit' && !/^\\/verification\\/cases\\/[0-9a-f-]{36}\\/(approve|reject)$/i.test(path)) throw new BackendFailure();
             return decode(null, response.headers, started);
           }
           if (response.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() !== 'application/json') throw new BackendFailure();
@@ -160,6 +160,20 @@ export class BackendAuthClient {
       if (error instanceof BackendFailure) throw error;
       throw new BackendFailure();
     } finally { clearTimeout(timeout); controller.abort(); }
+  }
+  async decideVerificationCase(bearer: string, id: string, action: 'approve' | 'reject',
+    payload: { expected_version: number; expected_evidence_revision: string; reason: string }): Promise<void> {
+    // Decisions are never made by the BFF. Only the restricted backend reviewer
+    // service may commit a version-checked audit event.
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) ||
+        !Number.isSafeInteger(payload.expected_version) || payload.expected_version < 0 ||
+        !payload.expected_evidence_revision || payload.expected_evidence_revision.length > 256 ||
+        !payload.reason.trim() || payload.reason.length > 500)
+      throw new BackendFailure(422);
+    const path = '/verification/cases/' + encodeURIComponent(id) + '/' + action;
+    return this.#call(path, 'POST', value => {
+      if (value !== null && (typeof value !== 'object' || Array.isArray(value))) throw new BackendFailure();
+    }, { bearer, body: payload });
   }
   reviewCases(bearer: string, status: 'pending' | 'approved' | 'rejected' | 'suspended', limit: number) {
     return this.#call('/verification/cases?status=' + status + '&limit=' + limit, 'GET', value => {

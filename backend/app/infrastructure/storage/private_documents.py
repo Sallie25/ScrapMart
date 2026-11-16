@@ -164,6 +164,9 @@ class DurableVolumeDocumentStorage:
 
 
 def get_private_document_storage(settings: Settings) -> PrivateDocumentStorage:
+    if settings.private_document_storage_backend == 'r2_private':
+        from app.infrastructure.storage.r2_private_documents import R2PrivateDocumentStorage
+        return R2PrivateDocumentStorage.from_settings(settings)
     if settings.private_document_storage_backend != 'durable_volume' or not settings.private_document_storage_durable or not settings.private_document_storage_root:
         raise VerificationInfrastructureUnavailable()
     return DurableVolumeDocumentStorage(settings.private_document_storage_root)

@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     private_document_storage_backend: str = "disabled"
     private_document_storage_root: str | None = None
     private_document_storage_durable: bool = False
+    # Dedicated private object bucket. Secrets live only in Render secure environment.
+    private_document_r2_account_id: str | None = None
+    private_document_r2_bucket: str | None = None
+    private_document_r2_access_key_id: SecretStr | None = None
+    private_document_r2_secret_access_key: SecretStr | None = None
     auth_allowed_origins: list[str] = []
     auth_trusted_proxy_cidrs: list[str] = []
 

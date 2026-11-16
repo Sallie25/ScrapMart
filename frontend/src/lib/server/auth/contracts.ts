@@ -28,6 +28,17 @@ export const verificationStatus = z.enum(['pending', 'approved', 'rejected', 'su
 export const capabilities = z.object({ buyer: z.boolean(), vendor: z.boolean(),
   vendor_verification_status: verificationStatus.nullable() }).strict()
   .refine(value => value.vendor === (value.vendor_verification_status !== null));
+export const vendorOnboardingPatch = z.object({
+  business_name: text(200).optional(),
+  shop_location: text(200).optional(),
+  shop_address: text(500).optional(),
+}).strict().refine(value => Object.keys(value).length > 0);
+export const vendorOnboarding = z.object({
+  business_name: z.string(),
+  shop_location: z.string().nullable(),
+  shop_address: z.string().nullable(),
+  verification_status: verificationStatus,
+}).strict();
 export const vendorProfile = z.object({ business_name: z.string(), verification_status: verificationStatus,
   full_name: z.string(), email: z.string(), phone_number: z.string().nullable(),
   created_at: z.string().refine(value => Number.isFinite(Date.parse(value))) }).strict();

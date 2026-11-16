@@ -1,6 +1,6 @@
 import 'server-only';
 import { BackendAuthClient, BackendFailure, boundedJson, exactHttpsOrigin } from './backend';
-import { buyerRegistration, vendorRegistration, vendorEnrollment, login, acknowledgment, safeFields } from './contracts';
+import { buyerRegistration, vendorRegistration, vendorEnrollment, vendorOnboardingPatch, login, acknowledgment, safeFields } from './contracts';
 import type { Role } from './contracts';
 import { hashIdentifier } from '../sessions/crypto';
 import { browserSessionCookie } from '../sessions/index';
@@ -48,18 +48,19 @@ export function createBffHandlers(dependencies?: { store: SessionStore; backend:
     const registration = path === 'buyer/signup' || path === 'vendor/signup';
     const signingIn = path === 'buyer/login' || path === 'vendor/login';
     const enrolling = path === 'vendor/enroll';
+    const onboarding = path === 'vendor/onboarding';
     const read = path === 'session' || path === 'vendor/status';
-    if (!registration && !signingIn && !enrolling && !read && path !== 'refresh' && path !== 'logout') return authError(404, 'not_found');
-    if (request.method !== (read ? 'GET' : 'POST')) return authError(405, 'method_not_allowed');
+    if (!registration && !signingIn && !enrolling && !onboarding && !read && path !== 'refresh' && path !== 'logout') return authError(404, 'not_found');
+    if (onboarding ? !['GET', 'PATCH'].includes(request.method) : request.method !== (read ? 'GET' : 'POST')) return authError(405, 'method_not_allowed');
     if (!dependencies || !origin) return authError(503, 'authentication_disabled');
     const { store, backend } = dependencies;
-    if (!read && (request.headers.get('origin') !== origin || new URL(request.url).origin !== origin ||
+    if (!read && !(onboarding && request.method === 'GET') && (request.headers.get('origin') !== origin || new URL(request.url).origin !== origin ||
         request.headers.get('x-scrapmart-csrf') !== '1' ||
         (request.headers.has('sec-fetch-site') && request.headers.get('sec-fetch-site') !== 'same-origin'))) {
       return authError(403, 'origin_or_csrf_rejected');
     }
     try {
-      if (!read && !registration && !signingIn && !enrolling && request.body) {
+      if (!read && !registration && !signingIn && !enrolling && !onboarding && request.body) {
         void request.body.cancel().catch(() => {});
         return authError(400, 'body_not_allowed');
       }
@@ -103,6 +104,26 @@ export function createBffHandlers(dependencies?: { store: SessionStore; backend:
       if (!id) return cookie(authError(401, 'session_required'));
       const metadata = await store.lookup(id); // Any storage error propagates as 503.
       if (!metadata) return cookie(authError(401, 'session_required'));
+      if (onboarding) {
+        let patch: { business_name?: string; shop_location?: string; shop_address?: string } | null = null;
+        if (request.method === 'PATCH') {
+          if (request.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() !== 'application/json')
+            return authError(415, 'json_required');
+          const input = await boundedJson(request.body, AbortSignal.any([request.signal, AbortSignal.timeout(5000)]));
+          const parsed = vendorOnboardingPatch.safeParse(input);
+          if (!parsed.success) return authError(422, 'validation_error');
+          patch = parsed.data;
+        }
+        try {
+          return await store.withAccess(id, async access => response(
+            patch ? await backend.updateVendorOnboarding(access, patch) : await backend.getVendorOnboarding(access)
+          ));
+        } catch (error) {
+          if (error instanceof SessionAccessExpired) return authError(401, 'session_refresh_required');
+          if (error instanceof BackendFailure && error.status === 401) return authError(401, 'session_refresh_required');
+          return backendError(error);
+        }
+      }
       if (enrolling) {
         if (request.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() !== 'application/json')
           return authError(415, 'json_required');

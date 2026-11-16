@@ -8,7 +8,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { AuthField } from "@/components/auth/auth-field";
-import { AuthIcon } from "@/components/auth/auth-icon";
 import {
   buyerSignupSchema,
   vendorSignupSchema,

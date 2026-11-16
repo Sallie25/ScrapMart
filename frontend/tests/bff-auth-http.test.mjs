@@ -594,7 +594,7 @@ test('vendor formally submits complete verification evidence without granting ap
     assert.equal(req.headers.get('origin'), origin);
     assert.equal(req.headers.get('x-scrapmart-csrf'), '1');
     assert.deepEqual(await req.json(), {});
-    return Response.json({ verification_status: 'pending' }, { status: 200 });
+    return new Response(null, { status: 204 });
   });
   const id = await seed(f);
   const reply = await f.send('vendor/verification/submit', { cookie: id, body: {} });

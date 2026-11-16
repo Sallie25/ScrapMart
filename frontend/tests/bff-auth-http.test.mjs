@@ -427,7 +427,7 @@ test('unsupported operations and methods never dispatch backend credentials', as
     assert.equal((await f.send(path, { method: 'GET' })).status, 405);
   }
   assert.equal((await f.send('session')).status, 405);
-  assert.equal((await f.send('vendor/enroll', { body: signup })).status, 404);
+  assert.equal((await f.send('vendor/enroll', { body: { business_name: 'Test Shop', current_password: password } })).status, 401);
   assert.equal((await f.send('logout-all')).status, 404);
   assert.equal(f.calls.length, 0); assert.equal(f.db.calls.length, 0);
 });
@@ -444,4 +444,28 @@ test('an aborted browser body is canceled before backend dispatch', async () => 
   controller.abort();
   assert.equal((await handle(req, ['buyer', 'signup'])).status, 503);
   assert.equal(canceled, true); assert.equal(f.calls.length, 0);
+});
+
+test('vendor enrollment requires browser session and exact backend 204', async () => {
+  const f = fixture(async req => {
+    assert.equal(req.url, backendOrigin + '/api/v1/auth/vendor/enroll');
+    assert.equal(req.headers.get('authorization'), 'Bearer ' + access);
+    assert.equal(req.headers.get('x-scrapmart-csrf'), '1');
+    assert.equal(req.headers.get('origin'), origin);
+    assert.deepEqual(await req.json(), { business_name: 'Test Shop', current_password: password });
+    return new Response(null, { status: 204 });
+  });
+  const body = { business_name: 'Test Shop', current_password: password };
+  const id = await seed(f);
+  assert.equal((await f.send('vendor/enroll', { body, cookie: id })).status, 204);
+  assert.equal(f.calls.length, 1);
+  assert.ok(await f.store.lookup(id));
+});
+
+test('vendor enrollment rejects malformed fields before backend dispatch', async () => {
+  const f = fixture(() => assert.fail('invalid request reached backend'));
+  const id = await seed(f);
+  assert.equal((await f.send('vendor/enroll', { cookie: id,
+    body: { business_name: '', current_password: password, verification_status: 'approved' } })).status, 422);
+  assert.equal(f.calls.length, 0);
 });

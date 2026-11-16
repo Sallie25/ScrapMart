@@ -87,7 +87,7 @@ export class BackendAuthClient {
         (async () => {
           const response = await this.#transport(request);
           if (response.status === 204) {
-            if (path !== '/logout') throw new BackendFailure();
+            if (path !== '/logout' && path !== '/vendor/enroll') throw new BackendFailure();
             return decode(null, response.headers, started);
           }
           if (response.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() !== 'application/json') throw new BackendFailure();
@@ -100,7 +100,7 @@ export class BackendAuthClient {
             throw new BackendFailure([401,403,413,415,422,429,503].includes(response.status) ? response.status : 502,
               retry && /^\d{1,5}$/.test(retry) ? retry : undefined, fields);
           }
-          if (response.status !== (path === '/logout' ? 204 : path.endsWith('/signup') ? 202 : 200)) throw new BackendFailure();
+          if (response.status !== ((path === '/logout' || path === '/vendor/enroll') ? 204 : path.endsWith('/signup') ? 202 : 200)) throw new BackendFailure();
           return decode(body, response.headers, started);
         })(),
         new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new BackendFailure()); }, this.#timeout); }),
@@ -127,6 +127,11 @@ export class BackendAuthClient {
   }
   logout(cookie: string): Promise<void> {
     return this.#call('/logout', 'POST', value => { if (value !== null) throw new BackendFailure(); }, { cookie });
+  }
+  enrollVendor(bearer: string, body: { business_name: string; current_password: string }): Promise<void> {
+    return this.#call('/vendor/enroll', 'POST', value => {
+      if (value !== null) throw new BackendFailure();
+    }, { bearer, body });
   }
   capabilities(bearer: string) {
     return this.#call('/capabilities', 'GET', value => {

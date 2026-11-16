@@ -69,8 +69,8 @@ export function ContactVendorForm({
           role="status"
           className="mt-4 rounded-lg border border-border bg-background p-3 text-sm text-text"
         >
-          Demo interaction completed. No message has been sent to {vendorName};
-          backend messaging integration is still required.
+          Sample interaction only. No message has been sent to {vendorName}.
+          Use a live listing to send a real message.
         </p>
       )}
 

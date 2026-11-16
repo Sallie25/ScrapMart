@@ -77,7 +77,7 @@ function formatPrice(price: number) {
   }).format(price);
 }
 
-export function ListingDetails({ id }: { id: string }) {
+export function ListingDetails({ id, returnTo = "/marketplace" }: { id: string; returnTo?: string }) {
   const [activeImage, setActiveImage] = useState(0);
   const [notice, setNotice] = useState<"order" | "report" | null>(null);
   const vendorListingsSnapshot = useSyncExternalStore(
@@ -118,7 +118,7 @@ export function ListingDetails({ id }: { id: string }) {
         <p className="buyer-muted mt-3">
           This listing is unavailable or is stored in a different browser.
         </p>
-        <Link href="/marketplace" className="buyer-button mt-6">
+        <Link href={returnTo} className="buyer-button mt-6">
           Return to marketplace
         </Link>
       </section>
@@ -137,7 +137,7 @@ export function ListingDetails({ id }: { id: string }) {
   return (
     <>
       <Link
-        href="/marketplace"
+        href={returnTo}
         className="buyer-muted mb-5 inline-flex min-h-11 items-center gap-2 text-sm font-bold"
       >
         <BuyerIcon name="arrow" />
@@ -283,7 +283,7 @@ export function ListingDetails({ id }: { id: string }) {
             >
               <p>
                 {notice === "order"
-                  ? "Orders require account and transaction integration. No order, reservation or payment has been created."
+                  ? "Sample interaction only. No real order, reservation or payment has been created."
                   : "Reporting is not connected. No report was submitted or saved."}
               </p>
               <button

@@ -44,8 +44,8 @@ export function VendorShopProfile() {
     const data = new FormData(event.currentTarget);
     const file = data.get("identity_document");
     const kind = String(data.get("identification_type") ?? "");
-    if (!(file instanceof File) || !file.size || file.size > 5 * 1024 * 1024 || !["image/jpeg", "image/png"].includes(file.type)) {
-      setVerificationError("Choose a JPEG or PNG document no larger than 5 MB."); return;
+    if (!(file instanceof File) || !file.size || file.size > 3 * 1024 * 1024 || !["image/jpeg", "image/png"].includes(file.type)) {
+      setVerificationError("Choose a JPEG or PNG document no larger than 3 MB."); return;
     }
     setBusy(true); setVerificationNotice(""); setVerificationError("");
     try {

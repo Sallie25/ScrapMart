@@ -54,8 +54,8 @@ export function VendorListingForm({ categories, listingId }: { categories: Catal
     if ((body.latitude === null) !== (body.longitude === null)) {
       setError("Provide both latitude and longitude, or leave both blank for a draft."); setBusy(false); return;
     }
-    if (photo && photo.size && (!["image/jpeg", "image/png"].includes(photo.type) || photo.size > 5 * 1024 * 1024)) {
-      setError("Choose a JPEG or PNG photo no larger than 5 MB."); setBusy(false); return;
+    if (photo && photo.size && (!["image/jpeg", "image/png"].includes(photo.type) || photo.size > 3 * 1024 * 1024)) {
+      setError("Choose a JPEG or PNG photo no larger than 3 MB."); setBusy(false); return;
     }
     let savedId = listingId;
     try {
@@ -106,8 +106,8 @@ export function VendorListingForm({ categories, listingId }: { categories: Catal
       </div>
       <label className="block text-sm font-semibold">Description *<textarea name="description" required minLength={10} maxLength={5000} defaultValue={initial?.description ?? ""} rows={4} className="mt-2 w-full rounded-md border border-border p-3" /></label>
       <div className="grid gap-5 sm:grid-cols-3">
-        <label className="block text-sm font-semibold">Price per unit in naira *<input name="price" required inputMode="decimal" pattern="[0-9]+(\\.[0-9]{1,2})?" defaultValue={initial?.price ?? ""} className="mt-2 w-full rounded-md border border-border p-3" /></label>
-        <label className="block text-sm font-semibold">Quantity *<input name="quantity" required inputMode="decimal" pattern="[0-9]+(\\.[0-9]{1,3})?" defaultValue={initial?.quantity ?? ""} className="mt-2 w-full rounded-md border border-border p-3" /></label>
+        <label className="block text-sm font-semibold">Price per unit in naira *<input name="price" required inputMode="decimal" pattern="[0-9]+([.][0-9]{1,2})?" defaultValue={initial?.price ?? ""} className="mt-2 w-full rounded-md border border-border p-3" /></label>
+        <label className="block text-sm font-semibold">Quantity *<input name="quantity" required inputMode="decimal" pattern="[0-9]+([.][0-9]{1,3})?" defaultValue={initial?.quantity ?? ""} className="mt-2 w-full rounded-md border border-border p-3" /></label>
         <label className="block text-sm font-semibold">Unit *<select name="quantity_unit" required defaultValue={initial?.quantity_unit ?? "kilograms"} className="mt-2 w-full rounded-md border border-border p-3">{units.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
       </div>
       <label className="block text-sm font-semibold">Approximate location *<input name="location_summary" required maxLength={255} defaultValue={initial?.location_summary ?? ""} placeholder="e.g. Ikeja, Lagos" className="mt-2 w-full rounded-md border border-border p-3" /></label>

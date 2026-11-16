@@ -64,7 +64,7 @@ export function ListingInteractions({ listing }: { listing: CatalogueListing }) 
     {notice && <p role="status" className="mt-4 text-sm text-green-800">{notice}</p>}
     <form onSubmit={placeOrder} className="mt-5 flex flex-wrap items-end gap-3">
       <label className="grid gap-1 text-sm font-bold">Quantity ({formatQuantity(listing.available_quantity)} available)
-        <input type="text" inputMode="decimal" required pattern="[0-9]+(\\.[0-9]{1,3})?" value={quantity}
+        <input type="text" inputMode="decimal" required pattern="[0-9]+([.][0-9]{1,3})?" value={quantity}
           disabled={listing.price_type === "total"} onChange={event => { setQuantity(event.target.value); orderId.current = null; }}
           className="w-36 rounded-md border border-border bg-white p-3" /></label>
       <button type="submit" disabled={busy} className="buyer-button">Place pay-on-delivery order</button>

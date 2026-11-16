@@ -78,3 +78,34 @@ test('Buyer order and conversation requests use only approved backend routes', a
   assert.deepEqual(paths, ['/api/v1/buyer/orders', '/api/v1/conversations']);
   assert.equal((await handle(request('buyer/orders/admin', 'POST', {}), ['buyer', 'orders', 'admin'])).status, 404);
 });
+
+test('image uploads accept the backend 3 MB boundary and reject larger bodies before forwarding', async () => {
+  let calls = 0;
+  const handle = createVendorHandlers({ store: { lookup: async () => ({ expiresAt: new Date(Date.now() + 60000) }), withAccess: async (_id, callback) => callback(access) },
+    backendOrigin, browserOrigin: origin, transport: async upstream => {
+      calls++;
+      assert.equal((await upstream.arrayBuffer()).byteLength, 3 * 1024 * 1024);
+      return Response.json({ id: 'synthetic-photo' }, { status: 201 });
+    } });
+  const listing = '12345678-1234-1234-1234-123456789abc';
+  const upload = size => new Request(`${origin}/api/vendor/listings/${listing}/photos?public_consent=true`, {
+    method: 'POST', headers: { Cookie: `__Host-scrapmart_session=${browserId}`, Origin: origin,
+      'X-ScrapMart-CSRF': '1', 'Content-Type': 'image/jpeg' }, body: new Uint8Array(size),
+  });
+  assert.equal((await handle(upload(3 * 1024 * 1024 + 1), ['listings', listing, 'photos'])).status, 413);
+  assert.equal(calls, 0);
+  assert.equal((await handle(upload(3 * 1024 * 1024), ['listings', listing, 'photos'])).status, 201);
+  assert.equal(calls, 1);
+});
+
+test('photos require explicit public consent and JPEG or PNG before any upstream action', async () => {
+  const handle = createVendorHandlers({ store: {}, backendOrigin, browserOrigin: origin,
+    transport: async () => assert.fail('Invalid upload must not reach backend') });
+  const listing = '12345678-1234-1234-1234-123456789abc';
+  const upload = (query, type) => new Request(`${origin}/api/vendor/listings/${listing}/photos${query}`, {
+    method: 'POST', headers: { Cookie: `__Host-scrapmart_session=${browserId}`, Origin: origin,
+      'X-ScrapMart-CSRF': '1', 'Content-Type': type }, body: new Uint8Array(10),
+  });
+  assert.equal((await handle(upload('', 'image/jpeg'), ['listings', listing, 'photos'])).status, 422);
+  assert.equal((await handle(upload('?public_consent=true', 'image/svg+xml'), ['listings', listing, 'photos'])).status, 415);
+});

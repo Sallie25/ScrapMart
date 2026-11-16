@@ -87,7 +87,7 @@ export function createVendorHandlers(deps?: { store: SessionStore; backendOrigin
     if (mutating && !binary && request.method !== 'DELETE' &&
       request.headers.get('content-type')?.split(';', 1)[0] !== 'application/json') return failure(415, 'json_required');
     let body: Buffer | undefined;
-    try { if (mutating && request.body) body = await bytes(request.body, binary ? 5 * 1024 * 1024 : 16384); }
+    try { if (mutating && request.body) body = await bytes(request.body, binary ? 3 * 1024 * 1024 : 16384); }
     catch { return failure(413, 'request_too_large'); }
     try {
       if (!await deps.store.lookup(identifier)) return failure(401, 'session_required');

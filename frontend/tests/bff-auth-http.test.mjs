@@ -446,6 +446,40 @@ test('an aborted browser body is canceled before backend dispatch', async () => 
   assert.equal(canceled, true); assert.equal(f.calls.length, 0);
 });
 
+test('vendor shop details use authenticated GET and CSRF-protected PATCH', async () => {
+  const record = { business_name: 'Test Shop', shop_location: 'Ikeja', shop_address: 'Main Road', verification_status: 'pending' };
+  const f = fixture(async req => {
+    assert.equal(req.url, backendOrigin + '/api/v1/auth/vendor/onboarding');
+    assert.equal(req.headers.get('authorization'), 'Bearer ' + access);
+    if (req.method === 'PATCH') {
+      assert.equal(req.headers.get('origin'), origin);
+      assert.equal(req.headers.get('x-scrapmart-csrf'), '1');
+      assert.deepEqual(await req.json(), { shop_location: 'Ikeja', shop_address: 'Main Road' });
+    } else assert.equal(req.method, 'GET');
+    return json(record);
+  });
+  const id = await seed(f);
+  const read = await f.send('vendor/onboarding', { method: 'GET', cookie: id });
+  assert.equal(read.status, 200);
+  assert.deepEqual(await read.json(), record);
+  const patch = await f.send('vendor/onboarding', { method: 'PATCH', cookie: id,
+    body: { shop_location: 'Ikeja', shop_address: 'Main Road' },
+    headers: { Origin: origin, 'X-ScrapMart-CSRF': '1' } });
+  assert.equal(patch.status, 200);
+  assert.equal(f.calls.length, 2);
+});
+
+test('vendor shop update rejects unauthorized and unsafe inputs without backend dispatch', async () => {
+  const f = fixture(() => assert.fail('Unauthorized shop mutation reached backend'));
+  const id = await seed(f);
+  const body = { shop_location: 'Ikeja', shop_address: 'Main Road' };
+  assert.equal((await f.send('vendor/onboarding', { method: 'PATCH', body, cookie: id })).status, 403);
+  assert.equal((await f.send('vendor/onboarding', { method: 'PATCH', body: { verification_status: 'approved' },
+    cookie: id, headers: { Origin: origin, 'X-ScrapMart-CSRF': '1' } })).status, 422);
+  assert.equal((await f.send('vendor/onboarding', { method: 'GET' })).status, 401);
+  assert.equal(f.calls.length, 0);
+});
+
 test('vendor enrollment requires browser session and exact backend 204', async () => {
   const f = fixture(async req => {
     assert.equal(req.url, backendOrigin + '/api/v1/auth/vendor/enroll');

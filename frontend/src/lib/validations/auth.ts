@@ -51,7 +51,7 @@ const commonSignupFields = {
   password: signupPasswordSchema,
   previewConsent: z
     .boolean()
-    .refine(Boolean, "Confirm that you understand this is a demo"),
+    .refine(Boolean, "Confirm the registration acknowledgement"),
 };
 export const buyerSignupSchema = z.object(commonSignupFields);
 // Vendor registration requires a business name in the current backend contract.

@@ -49,8 +49,9 @@ export function createBffHandlers(dependencies?: { store: SessionStore; backend:
     const signingIn = path === 'buyer/login' || path === 'vendor/login';
     const enrolling = path === 'vendor/enroll';
     const onboarding = path === 'vendor/onboarding';
+    const identityUpload = path === 'vendor/identity-document';
     const read = path === 'session' || path === 'vendor/status';
-    if (!registration && !signingIn && !enrolling && !onboarding && !read && path !== 'refresh' && path !== 'logout') return authError(404, 'not_found');
+    if (!registration && !signingIn && !enrolling && !onboarding && !identityUpload && !read && path !== 'refresh' && path !== 'logout') return authError(404, 'not_found');
     if (onboarding ? !['GET', 'PATCH'].includes(request.method) : request.method !== (read ? 'GET' : 'POST')) return authError(405, 'method_not_allowed');
     if (!dependencies || !origin) return authError(503, 'authentication_disabled');
     const { store, backend } = dependencies;
@@ -60,7 +61,7 @@ export function createBffHandlers(dependencies?: { store: SessionStore; backend:
       return authError(403, 'origin_or_csrf_rejected');
     }
     try {
-      if (!read && !registration && !signingIn && !enrolling && !onboarding && request.body) {
+      if (!read && !registration && !signingIn && !enrolling && !onboarding && !identityUpload && request.body) {
         void request.body.cancel().catch(() => {});
         return authError(400, 'body_not_allowed');
       }
@@ -104,6 +105,48 @@ export function createBffHandlers(dependencies?: { store: SessionStore; backend:
       if (!id) return cookie(authError(401, 'session_required'));
       const metadata = await store.lookup(id); // Any storage error propagates as 503.
       if (!metadata) return cookie(authError(401, 'session_required'));
+      if (identityUpload) {
+        const identificationType = new URL(request.url).searchParams;
+        const keys = [...identificationType.keys()];
+        if (keys.length !== 1 || keys[0] !== 'identification_type') return authError(422, 'validation_error');
+        const kind = identificationType.get('identification_type') ?? '';
+        if (!['national_id', 'passport', 'drivers_license', 'voter_id'].includes(kind))
+          return authError(422, 'validation_error');
+        const mediaType = request.headers.get('content-type')?.trim().toLowerCase() ?? '';
+        if (!['image/jpeg', 'image/png'].includes(mediaType)) return authError(415, 'unsupported_media_type');
+        const maxBytes = 3 * 1024 * 1024;
+        const claimedLength = request.headers.get('content-length');
+        if (claimedLength !== null && (!/^\\d+$/.test(claimedLength) || Number(claimedLength) > maxBytes))
+          return authError(413, 'request_too_large');
+        if (!request.body) return authError(422, 'validation_error');
+        const reader = request.body.getReader();
+        const parts: Uint8Array[] = [];
+        let count = 0;
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            count += value.byteLength;
+            if (count > maxBytes) { void reader.cancel().catch(() => {}); return authError(413, 'request_too_large'); }
+            parts.push(value);
+          }
+        } catch { return authError(422, 'validation_error'); }
+        finally { reader.releaseLock(); }
+        if (count === 0) return authError(422, 'validation_error');
+        const bytes = new Uint8Array(count);
+        let offset = 0;
+        for (const part of parts) { bytes.set(part, offset); offset += part.byteLength; }
+        try {
+          return await store.withAccess(id, async access => {
+            await backend.uploadIdentityDocument(access, kind, bytes, mediaType);
+            return response({ submitted: true });
+          });
+        } catch (error) {
+          if (error instanceof SessionAccessExpired) return authError(401, 'session_refresh_required');
+          if (error instanceof BackendFailure && error.status === 401) return authError(401, 'session_refresh_required');
+          return backendError(error);
+        }
+      }
       if (onboarding) {
         let patch: { business_name?: string; shop_location?: string; shop_address?: string } | null = null;
         if (request.method === 'PATCH') {

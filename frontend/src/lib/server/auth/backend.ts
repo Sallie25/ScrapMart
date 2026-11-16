@@ -1,6 +1,6 @@
 import 'server-only';
 import { z } from 'zod';
-import { acknowledgment, capabilities, vendorProfile, tokenResponse } from './contracts';
+import { acknowledgment, capabilities, vendorProfile, vendorOnboarding, tokenResponse } from './contracts';
 import type { Role } from './contracts';
 import type { Credentials } from '../sessions/crypto';
 
@@ -70,13 +70,13 @@ export class BackendAuthClient {
     this.#transport = options.transport; this.#timeout = options.timeoutMs ?? 5000;
     if (typeof this.#transport !== 'function' || !Number.isInteger(this.#timeout) || this.#timeout < 1 || this.#timeout > 10000) throw new BackendFailure();
   }
-  async #call<T>(path: string, method: 'GET' | 'POST', decode: (body: unknown, headers: Headers, started: number) => T,
+  async #call<T>(path: string, method: 'GET' | 'POST' | 'PATCH', decode: (body: unknown, headers: Headers, started: number) => T,
     options: { body?: unknown; bearer?: string; cookie?: string } = {}): Promise<T> {
     const controller = new AbortController(); let timer: ReturnType<typeof setTimeout> | undefined;
     const started = Date.now();
     try {
       const headers = new Headers();
-      if (method === 'POST') { headers.set('Origin', this.#browserOrigin); headers.set('X-ScrapMart-CSRF', '1'); }
+      if (method !== 'GET') { headers.set('Origin', this.#browserOrigin); headers.set('X-ScrapMart-CSRF', '1'); }
       if (options.body !== undefined) headers.set('Content-Type', 'application/json');
       if (options.bearer) headers.set('Authorization', `Bearer ${options.bearer}`);
       if (options.cookie) headers.set('Cookie', `${backendRefreshCookie}=${options.cookie}`);
@@ -131,6 +131,22 @@ export class BackendAuthClient {
   enrollVendor(bearer: string, body: { business_name: string; current_password: string }): Promise<void> {
     return this.#call('/vendor/enroll', 'POST', value => {
       if (value !== null) throw new BackendFailure();
+    }, { bearer, body });
+  }
+  getVendorOnboarding(bearer: string) {
+    return this.#call('/vendor/onboarding', 'GET', value => {
+      const parsed = vendorOnboarding.safeParse(value);
+      if (!parsed.success) throw new BackendFailure();
+      return parsed.data;
+    }, { bearer });
+  }
+  updateVendorOnboarding(bearer: string, body: {
+    business_name?: string; shop_location?: string; shop_address?: string
+  }) {
+    return this.#call('/vendor/onboarding', 'PATCH', value => {
+      const parsed = vendorOnboarding.safeParse(value);
+      if (!parsed.success) throw new BackendFailure();
+      return parsed.data;
     }, { bearer, body });
   }
   capabilities(bearer: string) {

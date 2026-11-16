@@ -586,3 +586,28 @@ test('phone OTP verification rejects client-specified numbers and invalid codes'
   assert.equal((await f.send('phone/send-code', { body: {} })).status, 401);
   assert.equal(f.calls.length, 0);
 });
+
+test('vendor formally submits complete verification evidence without granting approval', async () => {
+  const f = fixture(async req => {
+    assert.equal(req.url, backendOrigin + '/api/v1/auth/vendor/verification/submit');
+    assert.equal(req.headers.get('authorization'), 'Bearer ' + access);
+    assert.equal(req.headers.get('origin'), origin);
+    assert.equal(req.headers.get('x-scrapmart-csrf'), '1');
+    assert.deepEqual(await req.json(), {});
+    return Response.json({ verification_status: 'pending' }, { status: 200 });
+  });
+  const id = await seed(f);
+  const reply = await f.send('vendor/verification/submit', { cookie: id, body: {} });
+  assert.equal(reply.status, 200);
+  assert.deepEqual(await reply.json(), { submitted_for_review: true });
+  assert.equal(f.calls.length, 1);
+});
+
+test('verification review submission rejects client approval or arbitrary evidence metadata', async () => {
+  const f = fixture(() => assert.fail('untrusted submission reached backend'));
+  const id = await seed(f);
+  assert.equal((await f.send('vendor/verification/submit', { cookie: id,
+    body: { verification_status: 'approved' } })).status, 422);
+  assert.equal((await f.send('vendor/verification/submit', { body: {} })).status, 401);
+  assert.equal(f.calls.length, 0);
+});

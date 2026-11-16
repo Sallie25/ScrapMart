@@ -548,3 +548,41 @@ test('vendor identity upload rejects unsupported content and invalid type before
   }
   assert.equal(f.calls.length, 0);
 });
+
+test('phone OTP requests use authenticated session and never expose SMS code', async () => {
+  const f = fixture(async req => {
+    assert.equal(req.url, backendOrigin + '/api/v1/auth/phone/send-code');
+    assert.equal(req.headers.get('authorization'), 'Bearer ' + access);
+    assert.equal(req.headers.get('x-scrapmart-csrf'), '1');
+    assert.deepEqual(await req.json(), {});
+    return json({ message: 'Request accepted.' }, 202);
+  });
+  const id = await seed(f);
+  const reply = await f.send('phone/send-code', { cookie: id, body: {} });
+  assert.equal(reply.status, 202);
+  assert.ok(!(await reply.text()).includes('123456'));
+  assert.equal(f.calls.length, 1);
+});
+
+test('phone OTP verification confirms only an exact backend 204', async () => {
+  const f = fixture(async req => {
+    assert.equal(req.url, backendOrigin + '/api/v1/auth/phone/verify-code');
+    assert.equal(req.headers.get('authorization'), 'Bearer ' + access);
+    assert.deepEqual(await req.json(), { code: '123456' });
+    return new Response(null, { status: 204 });
+  });
+  const id = await seed(f);
+  const reply = await f.send('phone/verify-code', { cookie: id, body: { code: '123456' } });
+  assert.equal(reply.status, 204);
+  assert.equal(f.calls.length, 1);
+});
+
+test('phone OTP verification rejects client-specified numbers and invalid codes', async () => {
+  const f = fixture(() => assert.fail('invalid phone request dispatched'));
+  const id = await seed(f);
+  assert.equal((await f.send('phone/send-code', { cookie: id, body: { phone: '+2348000000000' } })).status, 422);
+  assert.equal((await f.send('phone/verify-code', { cookie: id, body: { code: 'abcdef' } })).status, 422);
+  assert.equal((await f.send('phone/verify-code', { cookie: id, body: { code: '123456', verified: true } })).status, 422);
+  assert.equal((await f.send('phone/send-code', { body: {} })).status, 401);
+  assert.equal(f.calls.length, 0);
+});

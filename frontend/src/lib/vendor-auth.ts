@@ -1,9 +1,11 @@
 import { loginSchema, vendorSignupSchema } from "./validations/auth";
 import type { LoginFormValues, SignupFormValues } from "./validations/auth";
 
-type Result = { status: "accepted" | "authenticated" | "error"; message: string; fields?: string[] };
+type Result = { status: "accepted" | "authenticated" | "error"; message: string; fields?: string[]; code?: "logout_required" };
 type Transport = (input: string, init: RequestInit) => Promise<Response>;
 const unavailable = "Vendor authentication is unavailable. Please try again later.";
+const uncertainSignup = "We could not confirm your registration request. Please try logging in before submitting again.";
+const temporary = "Vendor authentication is temporarily unavailable. Please try again.";
 const accepted = "If registration was successful, you can now sign in.";
 const safeFields = ["email", "password", "full_name", "phone_number", "business_name"];
 
@@ -17,12 +19,14 @@ async function interpret(response: Response, operation: "signup" | "login"): Pro
   if (!body || typeof body !== "object" || !("detail" in body) || !body.detail ||
     typeof body.detail !== "object" || !("code" in body.detail)) return { status: "error", message: unavailable };
   const detail = body.detail as { code?: unknown; fields?: unknown };
+  if (detail.code === "logout_required") return { status: "error", code: "logout_required", message: "You're already signed in." };
   const fields = Array.isArray(detail.fields) ? detail.fields.filter((value): value is string =>
     typeof value === "string" && safeFields.includes(value)) : [];
   const message = detail.code === "validation_error" ? "Please check the highlighted fields." :
     detail.code === "invalid_credentials" ? "Email or password is incorrect." :
-    detail.code === "logout_required" ? "Sign out of the current account first." :
-    detail.code === "rate_limited" ? "Too many attempts. Please try later." : unavailable;
+    detail.code === "rate_limited" ? "Too many attempts. Please try later." :
+    detail.code === "backend_unavailable" || detail.code === "session_unavailable" || detail.code === "backend_invalid_response"
+      ? operation === "signup" ? uncertainSignup : temporary : unavailable;
   return { status: "error", message, fields };
 }
 
@@ -43,7 +47,7 @@ export function createVendorAuthClient(transport: Transport = fetch) {
         headers: { "Content-Type": "application/json", "X-ScrapMart-CSRF": "1" }, body: JSON.stringify(payload),
       });
       return await interpret(response, operation);
-    } catch { return { status: "error", message: unavailable }; }
+    } catch { return { status: "error", message: operation === "signup" ? uncertainSignup : temporary }; }
     finally { pending = false; }
   }
   return { signup: (values: SignupFormValues) => submit("signup", values),

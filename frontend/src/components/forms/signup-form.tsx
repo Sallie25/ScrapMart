@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { createBuyerAuthClient } from "@/lib/buyer-auth";
 import { createVendorAuthClient } from "@/lib/vendor-auth";
 import { useForm } from "react-hook-form";
@@ -240,7 +241,13 @@ export function SignupForm({ role }: { role: "buyer" | "vendor" }) {
       <Button type="submit" block className="auth-button mt-6" disabled={pending} loading={pending}>
         {pending ? "Submitting…" : vendor ? "Create vendor account" : "Create buyer account"}
       </Button>
-      {result && <section role={result.accepted ? "status" : "alert"} className="auth-status mt-5"><p>{result.message}</p></section>}
+      {result && <section role={result.accepted ? "status" : "alert"} className="auth-status mt-5">
+        {result.accepted ? <>
+          <p className="font-bold">Registration request received!</p>
+          <p className="mt-2">You can now try logging in to ScrapMart.</p>
+          <Link href={`/login?role=${role}`} className="auth-button mt-4 inline-flex min-h-12 items-center justify-center px-5">Log in</Link>
+        </> : <p>{result.message}</p>}
+      </section>}
     </form>
   );
 }

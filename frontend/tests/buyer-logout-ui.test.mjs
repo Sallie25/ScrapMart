@@ -43,3 +43,42 @@ test('simultaneous logout attempts dispatch once', async () => {
   resolve(new Response(null, { status: 204 }));
   assert.equal(buyerLogoutDestination(await first), '/login?role=buyer');
 });
+
+test('already inactive session is verified before redirecting to Buyer login', async () => {
+  const calls = [];
+  const logout = createBuyerLogoutClient(async (path) => {
+    calls.push(path);
+    return Response.json({ detail: { code: 'session_required' } }, { status: 401 });
+  });
+  const result = await logout();
+  assert.equal(result.status, 'already_signed_out');
+  assert.equal(buyerLogoutDestination(result), '/login?role=buyer');
+  assert.deepEqual(calls, ['/api/auth/logout', '/api/auth/session']);
+});
+
+test('failed verification and network failure retain Retry state without a success claim', async () => {
+  for (const session of [Response.json({ authenticated: true }, { status: 200 }),
+    Response.json({ detail: { code: 'session_refresh_required' } }, { status: 401 })]) {
+    const result = await createBuyerLogoutClient(async path => path === '/api/auth/logout'
+      ? Response.json({ detail: { code: 'session_required' } }, { status: 401 }) : session)();
+    assert.equal(result.status, 'error'); assert.equal(buyerLogoutDestination(result), null);
+    assert.match(result.message, /Retry/);
+  }
+  const result = await createBuyerLogoutClient(async () => { throw Error('private detail'); })();
+  assert.equal(result.status, 'error'); assert.equal(buyerLogoutDestination(result), null);
+  assert.match(result.message, /Retry/); assert.doesNotMatch(result.message, /private detail/);
+});
+
+test('Retry after an unconfirmed logout verifies the inactive browser session', async () => {
+  let attempts = 0;
+  const logout = createBuyerLogoutClient(async path => {
+    if (path === '/api/auth/logout' && ++attempts === 1) {
+      return Response.json({ detail: { code: 'logout_unconfirmed' } }, { status: 503 });
+    }
+    return Response.json({ detail: { code: 'session_required' } }, { status: 401 });
+  });
+  assert.equal((await logout()).status, 'error');
+  const retried = await logout();
+  assert.equal(retried.status, 'already_signed_out');
+  assert.equal(buyerLogoutDestination(retried), '/login?role=buyer');
+});

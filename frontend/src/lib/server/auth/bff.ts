@@ -41,6 +41,29 @@ function identifier(request: Request): string | undefined {
   return value;
 }
 
+// Some HTTP adapters expose an empty stream for a POST with no payload.
+// Read only until the first byte, so bodyless refresh/logout still work while
+// supplied credentials remain rejected before any session or backend action.
+async function hasRequestBody(body: ReadableStream<Uint8Array> | null): Promise<boolean> {
+  if (!body) return false;
+  const reader = body.getReader();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('Request body timeout')), 5000);
+    });
+    while (true) {
+      const next = await Promise.race([reader.read(), deadline]);
+      if (next.done) return false;
+      if (next.value.byteLength) return true;
+    }
+  } finally {
+    clearTimeout(timer);
+    void reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+}
+
 export function createBffHandlers(dependencies?: { store: SessionStore; backend: BackendAuthClient; browserOrigin: string }) {
   const origin = dependencies ? exactHttpsOrigin(dependencies.browserOrigin) : undefined;
   return async function handle(request: Request, operation: readonly string[]): Promise<Response> {
@@ -58,8 +81,7 @@ export function createBffHandlers(dependencies?: { store: SessionStore; backend:
       return authError(403, 'origin_or_csrf_rejected');
     }
     try {
-      if (!read && !registration && !signingIn && request.body) {
-        void request.body.cancel().catch(() => {});
+      if (!read && !registration && !signingIn && await hasRequestBody(request.body)) {
         return authError(400, 'body_not_allowed');
       }
       if (registration || signingIn) {
@@ -84,7 +106,19 @@ export function createBffHandlers(dependencies?: { store: SessionStore; backend:
       }
       const id = identifier(request);
       if (path === 'logout') {
-        if (!id) return cookie(response(null, 204));
+        // A missing or inactive browser session is not an upstream logout
+        // confirmation. Tell the client to verify the anonymous state instead.
+        if (!id) return cookie(authError(401, 'session_required'));
+        let active: boolean;
+        try { active = !!await store.lookup(id); }
+        catch { return authError(503, 'logout_unconfirmed'); }
+        if (!active) {
+          // A concurrent refresh can also make the old ID inactive. Revoke its
+          // whole family so a late successor cannot restore access.
+          try { await store.revoke(id); }
+          catch { return authError(503, 'logout_unconfirmed'); }
+          return cookie(authError(401, 'session_required'));
+        }
         let backendConfirmed = false;
         // Use the validated single-use refresh claim as a logout fence. The
         // callback performs only backend logout and ALWAYS throws, so refresh

@@ -42,7 +42,7 @@ function fixture(transport, timeoutMs = 1000) {
   const backend = new BackendAuthClient({ origin: backendOrigin, browserOrigin: origin, timeoutMs,
     transport: async req => { calls.push(req); return transport(req, { refresh, expires }); } });
   const handle = createBffHandlers({ store, backend, browserOrigin: origin });
-  return { db, store, backend, calls, expires, refresh,
+  return { db, store, backend, calls, expires, refresh, handle,
     send: (path, options) => handle(request(path, options), path.split('/')) };
 }
 const signup = { email: 'buyer@example.test', password, full_name: 'Synthetic Buyer', phone_number: null };
@@ -216,7 +216,8 @@ test('logout sends the backend cookie once, revokes locally and clears the brows
   const id = await seed(f); const result = await f.send('logout', { cookie: id });
   assert.equal(result.status, 204); assert.equal(browserId(result), ''); assert.equal(await f.store.lookup(id), null);
   assert.equal(f.calls.length, 1); assert.equal(f.db.row.status, 'revoked');
-  assert.equal((await f.send('logout')).status, 204);
+  const absent = await f.send('logout');
+  assert.equal(absent.status, 401); assert.equal((await absent.json()).detail.code, 'session_required');
 });
 
 test('logout backend outage still revokes local family but reports unconfirmed revocation', async () => {
@@ -234,7 +235,8 @@ test('logout during refresh blocks a late browser-cookie successor without false
   });
   const id = await seed(f); const pending = f.send('refresh', { cookie: id });
   await entered.promise; const logout = await f.send('logout', { cookie: id });
-  assert.equal(logout.status, 503); release.resolve(); assert.equal((await pending).status, 503);
+  assert.equal(logout.status, 401); assert.equal((await logout.json()).detail.code, 'session_required');
+  release.resolve(); assert.equal((await pending).status, 503);
   assert.equal(f.db.row.status, 'revoked'); assert.equal(f.calls.length, 1);
 });
 
@@ -347,6 +349,41 @@ test('refresh and logout reject body credentials before store or backend operati
   assert.equal(f.db.calls.length, 0); assert.equal(f.calls.length, 0);
 });
 
+test('empty POST streams allow refresh and logout while body credentials stay rejected', async () => {
+  const f = fixture((req, data) => req.url.endsWith('/refresh') ? tokenReply(newIdentifier(), data.expires) :
+    new Response(null, { status: 204 }));
+  const empty = () => new ReadableStream({ start(controller) { controller.close(); } });
+  const sendEmpty = (path, id) => f.handle(new Request(origin + '/api/auth/' + path, {
+    method: 'POST', duplex: 'half', body: empty(), headers: {
+      Origin: origin, 'X-ScrapMart-CSRF': '1', Cookie: `__Host-scrapmart_session=${id}`,
+    },
+  }), [path]);
+  const original = await seed(f);
+  const refreshed = await sendEmpty('refresh', original);
+  assert.equal(refreshed.status, 200);
+  const successor = browserId(refreshed);
+  assert.ok(successor && successor !== original);
+  assert.equal((await sendEmpty('logout', successor)).status, 204);
+  assert.equal(await f.store.lookup(successor), null);
+});
+
+test('zero-length stream chunks are not mistaken for body credentials', async () => {
+  const f = fixture((req, data) => req.url.endsWith('/refresh') ? tokenReply(newIdentifier(), data.expires) :
+    new Response(null, { status: 204 }));
+  const send = (path, id) => f.handle(new Request(origin + '/api/auth/' + path, {
+    method: 'POST', duplex: 'half',
+    body: new ReadableStream({ start(controller) { controller.enqueue(new Uint8Array(0)); controller.close(); } }),
+    headers: { Origin: origin, 'X-ScrapMart-CSRF': '1', Cookie: `__Host-scrapmart_session=${id}` },
+  }), [path]);
+  const id = await seed(f);
+  const refreshed = await send('refresh', id);
+  assert.equal(refreshed.status, 200);
+  const successor = browserId(refreshed);
+  assert.ok(successor && successor !== id);
+  assert.equal((await send('logout', successor)).status, 204);
+  assert.equal(await f.store.lookup(successor), null);
+});
+
 test('a stalled backend response body is bounded by the same request deadline', async () => {
   let canceled = false;
   const f = fixture(() => new Response(new ReadableStream({ cancel() { canceled = true; } }),
@@ -399,8 +436,17 @@ test('revoked browser sessions cannot discover capabilities and repeated known-c
   assert.equal((await f.send('logout', { cookie: id })).status, 204);
   assert.equal((await f.send('session', { method: 'GET', cookie: id })).status, 401);
   const repeated = await f.send('logout', { cookie: id });
-  assert.equal(repeated.status, 503); assert.equal((await repeated.json()).detail.code, 'logout_unconfirmed');
-  assert.equal(f.calls.length, 1); assert.equal((await f.send('logout')).status, 204);
+  assert.equal(repeated.status, 401); assert.equal((await repeated.json()).detail.code, 'session_required');
+  assert.equal(browserId(repeated), '');
+  assert.equal(f.calls.length, 1); assert.equal((await f.send('logout')).status, 401);
+});
+
+test('expired browser session is reported inactive without claiming backend logout', async () => {
+  const f = fixture(() => assert.fail('Expired session reached backend')); const id = await seed(f);
+  f.db.row.expires_at = new Date(Date.now() - 1000);
+  const result = await f.send('logout', { cookie: id });
+  assert.equal(result.status, 401); assert.equal((await result.json()).detail.code, 'session_required');
+  assert.equal(browserId(result), ''); assert.equal(f.calls.length, 0);
 });
 
 test('capability discovery preserves Buyer-only, Vendor-only and shared experiences', async () => {

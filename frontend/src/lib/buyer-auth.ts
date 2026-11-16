@@ -1,10 +1,12 @@
 import { buyerSignupSchema, loginSchema } from "./validations/auth";
 import type { BuyerSignupValues, LoginFormValues } from "./validations/auth";
 
-type AuthResult = { status: "accepted" | "authenticated" | "error"; message: string; fields?: string[] };
+type AuthResult = { status: "accepted" | "authenticated" | "error"; message: string; fields?: string[]; code?: "logout_required" };
 type Transport = (input: string, init: RequestInit) => Promise<Response>;
 const acknowledgment = "If registration was successful, you can now sign in.";
 const unavailable = "Authentication is not available yet. Please try again later.";
+const uncertainSignup = "We could not confirm your registration request. Please try logging in before submitting again.";
+const temporary = "Authentication service is temporarily not available. Please try again.";
 const safeFields = ["email", "password", "full_name", "phone_number"];
 const failed = (message: string, fields?: string[]): AuthResult => ({ status: "error", message, fields });
 
@@ -26,9 +28,11 @@ async function interpret(response: Response, operation: "signup" | "login"): Pro
     ? body.detail.fields.filter((field): field is string => typeof field === "string" && safeFields.includes(field)) : [];
   if (code === "validation_error") return failed("Please check the highlighted fields and try again.", fields);
   if (code === "invalid_credentials") return failed("Email or password is incorrect.");
-  if (code === "logout_required") return failed("Sign out of the current account before signing in again.");
+  if (code === "logout_required") return { status: "error", code: "logout_required", message: "You're already signed in." };
   if (code === "rate_limited") return failed("Too many attempts. Please try again later.");
   if (code === "authentication_disabled") return failed("Authentication is not activated yet. No account or session was created.");
+  if (code === "backend_unavailable" || code === "session_unavailable" || code === "backend_invalid_response")
+    return failed(operation === "signup" ? uncertainSignup : temporary);
   return failed(unavailable);
 }
 
@@ -55,7 +59,7 @@ export function createBuyerAuthClient(transport: Transport = fetch) {
         body: JSON.stringify(payload),
       });
       return await interpret(response, operation);
-    } catch { return failed(unavailable); }
+    } catch { return failed(operation === "signup" ? uncertainSignup : temporary); }
     finally { pending = false; }
   }
   return { signup: (values: BuyerSignupValues) => submit("signup", values), login: (values: LoginFormValues) => submit("login", values) };

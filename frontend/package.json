@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:vendor-auth": "node --no-warnings --experimental-loader ./tests/helpers/next-node-test-loader.mjs --test tests/vendor-auth.test.mjs",
+    "test:bff-auth": "node --no-warnings --experimental-loader ./tests/helpers/next-node-test-loader.mjs --test tests/bff-auth-http.test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",

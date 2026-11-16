@@ -1,0 +1,42 @@
+# Operator-managed host example; no provider or HTTPS ingress is provisioned.
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: api
+    env_file:
+      - ${STAGING_API_ENV_FILE:?Set an absolute path to the private staging API environment file}
+    environment:
+      APP_ENVIRONMENT: staging
+    ports:
+      - "127.0.0.1:${STAGING_API_PORT:-8000}:8000"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, /app/.venv/bin/python, -B, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  maintenance:
+    profiles: [maintenance]
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: maintenance
+    environment:
+      APP_ENVIRONMENT: staging
+      STAGING_MAINTENANCE_DATABASE_URL: ${STAGING_MAINTENANCE_DATABASE_URL:-}
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    # No default operation: invocation without arguments only displays usage.

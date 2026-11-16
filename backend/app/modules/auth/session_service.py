@@ -1,0 +1,443 @@
+"""Database session services. No HTTP or JWT issuance.
+
+Each attempt constructs a NEW engine-bound SQLAlchemy Session/transaction.
+Only a synchronous Engine is accepted; Sessions, Connections and factories are
+rejected before any caller-owned resource is touched. Returned DTOs contain no
+ORM objects. Mutations lock User,
+then AuthSession, then RefreshToken; logout-all and session creation also lock
+User, establishing an order across all session operations for that identity.
+"""
+import uuid
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from typing import TypeVar
+
+from sqlalchemy import Engine, func, select, update
+from sqlalchemy.exc import DBAPIError, SQLAlchemyError
+from sqlalchemy.orm import Session
+
+from app.core.config import Settings, get_settings
+from app.modules.auth.models import User
+from app.modules.auth.email_identity_models import EmailIdentityReservation as Reservation
+from app.modules.auth.email_identity_policy import canonical_registration_key
+from app.modules.auth.login_policy import require_ready_registry, stored_email_matches
+from app.modules.buyers.models import BuyerProfile
+from app.modules.auth.security import (
+    AccessTokenClaims,
+    InvalidRefreshTokenError,
+    SecurityConfigurationError,
+    digest_refresh_token,
+    generate_refresh_token,
+)
+from app.modules.auth.session_models import AuthSession, RefreshToken
+
+
+class SessionAuthenticationError(ValueError):
+    """A generic rejection, with no token values or account-existence details."""
+
+    def __init__(self) -> None:
+        super().__init__("Authentication session is invalid")
+
+
+class SessionPersistenceError(RuntimeError):
+    """A persistence operation failed; do not expose database error details."""
+
+    def __init__(self) -> None:
+        super().__init__("Authentication session operation could not be completed")
+
+
+@dataclass(frozen=True)
+class SessionIdentity:
+    user_id: uuid.UUID
+    session_id: uuid.UUID
+    expires_at: datetime
+
+
+@dataclass(frozen=True)
+class SessionCredentials(SessionIdentity):
+    # Only the trusted calling layer receives plaintext, after successful commit.
+    refresh_token: str = field(repr=False)
+
+
+@dataclass(frozen=True)
+class BuyerAccountProfile:
+    email: str = field(repr=False)
+    full_name: str = field(repr=False)
+    phone_number: str | None = field(repr=False)
+    signup_completed_at: datetime
+
+
+_T = TypeVar("_T")
+_REPLAY = object()
+
+
+def _require_uuid(value: object) -> uuid.UUID:
+    if not isinstance(value, uuid.UUID):
+        raise SessionAuthenticationError()
+    return value
+
+
+def _utc(value: datetime, db: Session) -> datetime:
+    if value.tzinfo is None:
+        # SQLite loses tzinfo; production PostgreSQL must return aware values.
+        if db.get_bind().dialect.name != "sqlite":
+            raise SessionAuthenticationError()
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+class SessionService:
+    def __init__(
+        self, engine: Engine, *, settings: Settings | None = None,
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
+        if not isinstance(engine, Engine):
+            raise TypeError("SessionService requires a synchronous Engine; no Sessions, Connections or factories")
+        self._engine = engine
+        self._settings = settings
+        # Trusted injection for offline tests. Production defaults to DB time.
+        self._clock = clock
+
+    def _now(self, db: Session) -> datetime:
+        if self._clock is not None:
+            value = self._clock()
+        elif db.get_bind().dialect.name == "postgresql":
+            # Unlike now(), this advances while waiting for row locks.
+            value = db.scalar(select(func.clock_timestamp()))
+        else:
+            value = datetime.now(timezone.utc)
+        if not isinstance(value, datetime) or value.tzinfo is None:
+            raise SecurityConfigurationError("Session clock must return timezone-aware time")
+        return value.astimezone(timezone.utc)
+
+    def _transaction(self, operation: Callable[[Session], _T]) -> _T:
+        for attempt in range(3):
+            try:
+                with Session(self._engine) as db:
+                    with db.begin():
+                        connection = db.connection()
+                        # AUTOCOMMIT would make rollback/atomic rotation ineffective.
+                        # Inspect the actual driver state, including engine defaults.
+                        try:
+                            autocommit = connection.dialect.detect_autocommit_setting(
+                                connection.connection.dbapi_connection,
+                            )
+                        except NotImplementedError:
+                            raise SecurityConfigurationError(
+                                "SessionService requires a driver with autocommit detection"
+                            ) from None
+                        if autocommit:
+                            raise SecurityConfigurationError("SessionService requires transactional isolation")
+                        result = operation(db)
+                    # Commit has completed, including deferred constraints.
+                    return result
+            except DBAPIError as error:
+                if getattr(error.orig, "sqlstate", None) in {"40001", "40P01"} and attempt < 2:
+                    continue
+                raise SessionPersistenceError() from None
+            except (SQLAlchemyError, OSError):
+                raise SessionPersistenceError() from None
+        raise SessionPersistenceError()  # Defensive; every attempt returns/raises.
+
+    @staticmethod
+    def _lock_user(db: Session, user_id: uuid.UUID) -> User:
+        # Preserve every field, including updated_at, but create a row version.
+        # A lock-only SELECT does not invalidate a Repeatable Read snapshot:
+        # logout-all could otherwise miss a session created while it waited.
+        user = db.scalar(update(User).where(User.id == user_id).values(
+            updated_at=User.updated_at,
+        ).returning(User))
+        if user is None:
+            raise SessionAuthenticationError()
+        return user
+
+    @staticmethod
+    def _active_user(user: User) -> None:
+        if not user.is_active:
+            raise SessionAuthenticationError()
+
+    @staticmethod
+    def _lock_session(db: Session, user_id: uuid.UUID, session_id: uuid.UUID) -> AuthSession:
+        session = db.scalar(select(AuthSession).where(
+            AuthSession.id == session_id, AuthSession.user_id == user_id,
+        ).with_for_update())
+        if session is None:
+            raise SessionAuthenticationError()
+        return session
+
+    @staticmethod
+    def _active_session(db: Session, session: AuthSession, now: datetime) -> None:
+        if (
+            session.revoked_at is not None
+            or _utc(session.created_at, db) > now
+            or _utc(session.expires_at, db) <= now
+        ):
+            raise SessionAuthenticationError()
+
+    def _session_lifetime(self) -> timedelta:
+        settings = self._settings if self._settings is not None else get_settings()
+        days = settings.auth_session_expire_days
+        if type(days) is not int or days <= 0:
+            raise SecurityConfigurationError("Session lifetime must be a positive number of days")
+        try:
+            return timedelta(days=days)
+        except OverflowError:
+            raise SecurityConfigurationError("Session lifetime is outside the supported range") from None
+
+    def _create_session_records(self, db: Session, user_id: uuid.UUID, lifetime: timedelta) -> SessionCredentials:
+        """User lock and all caller-specific admission checks must precede this."""
+        now = self._now(db)
+        try:
+            expiry = now + lifetime
+        except OverflowError:
+            raise SecurityConfigurationError("Session lifetime is outside the supported range") from None
+        session = AuthSession(id=uuid.uuid4(), user_id=user_id, created_at=now, expires_at=expiry)
+        plaintext = generate_refresh_token()
+        db.add(RefreshToken(
+            session=session, token_digest=digest_refresh_token(plaintext),
+            created_at=now, expires_at=expiry,
+        ))
+        return SessionCredentials(user_id, session.id, expiry, plaintext)
+
+    def create_session(self, user_id: uuid.UUID) -> SessionCredentials:
+        """Call only after authenticating the existing identity; never links by email."""
+        user_id = _require_uuid(user_id)
+        lifetime = self._session_lifetime()
+
+        def operation(db: Session) -> SessionCredentials:
+            self._active_user(self._lock_user(db, user_id))
+            return self._create_session_records(db, user_id, lifetime)
+
+        return self._transaction(operation)
+
+    def admit_buyer_session(self, user_id: uuid.UUID, key: str, verified_password_hash: str) -> SessionCredentials:
+        """Trusted credential verifier only: the supplied hash must have verified.
+
+        Policy SHARE → reservation SHARE → User version update → Buyer SHARE,
+        then the existing User → AuthSession → RefreshToken creation sequence.
+        Locks survive through commit; no password verification runs under them.
+        """
+        user_id = _require_uuid(user_id)
+        if canonical_registration_key(key) != key or not isinstance(verified_password_hash, str):
+            raise SessionAuthenticationError()
+        lifetime = self._session_lifetime()
+
+        def operation(db: Session) -> SessionCredentials:
+            require_ready_registry(db)
+            reservation = db.scalar(select(Reservation.id).where(
+                Reservation.lookup_key == key, Reservation.state == "owned",
+                Reservation.policy_version == 1, Reservation.user_id == user_id,
+            ).with_for_update(read=True))
+            if reservation is None:
+                raise SessionAuthenticationError()
+            user = self._lock_user(db, user_id)
+            self._active_user(user)
+            if user.password_hash != verified_password_hash or not stored_email_matches(user.email, key):
+                raise SessionAuthenticationError()
+            buyer = db.scalar(select(BuyerProfile.id).where(
+                BuyerProfile.user_id == user_id,
+            ).with_for_update(read=True))
+            if buyer is None:
+                raise SessionAuthenticationError()
+            return self._create_session_records(db, user_id, lifetime)
+
+        return self._transaction(operation)
+
+    def validate_access_session(self, claims: AccessTokenClaims) -> SessionIdentity:
+        """Accept only Stage 2A-verified claims; no role/profile permission inference."""
+        if not isinstance(claims, AccessTokenClaims):
+            raise SessionAuthenticationError()
+        user_id = _require_uuid(claims.user_id)
+        session_id = _require_uuid(claims.session_id)
+
+        def operation(db: Session) -> SessionIdentity:
+            row = db.execute(select(User, AuthSession).join(
+                AuthSession, AuthSession.user_id == User.id,
+            ).where(User.id == user_id, AuthSession.id == session_id)).one_or_none()
+            if row is None:
+                raise SessionAuthenticationError()
+            user, session = row
+            self._active_user(user)
+            self._active_session(db, session, self._now(db))
+            return SessionIdentity(user_id, session_id, _utc(session.expires_at, db))
+
+        return self._transaction(operation)
+
+    def get_buyer_profile(self, claims: AccessTokenClaims) -> BuyerAccountProfile:
+        """Trusted JWT verifier only; live session and profile share one read.
+
+        Project only approved account fields, activation, and session state.
+        No password hash is loaded and no ORM objects escape the transaction.
+        """
+        if not isinstance(claims, AccessTokenClaims):
+            raise SessionAuthenticationError()
+        user_id = _require_uuid(claims.user_id)
+        session_id = _require_uuid(claims.session_id)
+
+        def operation(db: Session) -> BuyerAccountProfile:
+            row = db.execute(select(
+                User.is_active, User.email, User.full_name, User.phone_number,
+                BuyerProfile.signup_completed_at, AuthSession,
+            ).select_from(User).join(AuthSession, AuthSession.user_id == User.id).join(
+                BuyerProfile, BuyerProfile.user_id == User.id,
+            ).where(User.id == user_id, AuthSession.id == session_id)).one_or_none()
+            if row is None or not row.is_active:
+                raise SessionAuthenticationError()
+            now = self._now(db)
+            self._active_session(db, row.AuthSession, now)
+            if claims.expires_at <= now:
+                raise SessionAuthenticationError()
+            return BuyerAccountProfile(row.email, row.full_name, row.phone_number,
+                                       _utc(row.signup_completed_at, db))
+
+        return self._transaction(operation)
+
+    def rotate_refresh_token(self, plaintext: str) -> SessionCredentials:
+        try:
+            digest = digest_refresh_token(plaintext)
+        except InvalidRefreshTokenError:
+            raise SessionAuthenticationError() from None
+
+        def operation(db: Session) -> SessionCredentials | object:
+            # Lookup scalar IDs only; lock/re-read mutable state in a fixed order.
+            candidate = db.execute(select(RefreshToken.id, RefreshToken.session_id, AuthSession.user_id).join(
+                AuthSession, AuthSession.id == RefreshToken.session_id,
+            ).where(RefreshToken.token_digest == digest)).one_or_none()
+            if candidate is None:
+                raise SessionAuthenticationError()
+            token_id, session_id, user_id = candidate
+            user = self._lock_user(db, user_id)
+            session = self._lock_session(db, user_id, session_id)
+            token = db.scalar(select(RefreshToken).where(
+                RefreshToken.id == token_id, RefreshToken.session_id == session_id,
+                RefreshToken.token_digest == digest,
+            ).with_for_update())
+            if token is None:
+                raise SessionAuthenticationError()
+            now = self._now(db)
+            # Reuse is checked even if expiry/inactivation occurred afterwards.
+            if token.consumed_at is not None:
+                if session.revoked_at is None:
+                    session.revoked_at = now
+                return _REPLAY
+            self._active_user(user)
+            self._active_session(db, session, now)
+            expiry = _utc(session.expires_at, db)
+            if (
+                _utc(token.created_at, db) > now
+                or _utc(token.expires_at, db) <= now
+                or _utc(token.expires_at, db) > expiry
+            ):
+                raise SessionAuthenticationError()
+            replacement = generate_refresh_token()
+            token.consumed_at = now
+            db.add(RefreshToken(
+                session_id=session_id, token_digest=digest_refresh_token(replacement),
+                created_at=now, expires_at=expiry,
+            ))
+            return SessionCredentials(user_id, session_id, expiry, replacement)
+
+        result = self._transaction(operation)
+        if result is _REPLAY:
+            # This must be outside the transaction: do not roll back revocation.
+            raise SessionAuthenticationError()
+        return result
+
+    def revoke_session(self, user_id: uuid.UUID, session_id: uuid.UUID) -> bool:
+        user_id, session_id = _require_uuid(user_id), _require_uuid(session_id)
+
+        def operation(db: Session) -> bool:
+            self._active_user(self._lock_user(db, user_id))
+            session = self._lock_session(db, user_id, session_id)
+            if session.revoked_at is not None:
+                return False
+            session.revoked_at = self._now(db)
+            return True
+
+        return self._transaction(operation)
+
+    def revoke_refresh_session(self, plaintext: str) -> bool:
+        """Cookie logout: any issued family token may revoke its own session.
+
+        Consumed tokens remain valid for revocation, never for authentication.
+        Expired/inactive identities can still log out. No session/token is
+        created or rotated; the existing User -> session -> token order applies.
+        """
+        try:
+            digest = digest_refresh_token(plaintext)
+        except InvalidRefreshTokenError:
+            return False
+
+        def operation(db: Session) -> bool:
+            candidate = db.execute(select(RefreshToken.id, RefreshToken.session_id, AuthSession.user_id).join(
+                AuthSession, AuthSession.id == RefreshToken.session_id,
+            ).where(RefreshToken.token_digest == digest)).one_or_none()
+            if candidate is None:
+                return False
+            token_id, session_id, user_id = candidate
+            self._lock_user(db, user_id)
+            session = self._lock_session(db, user_id, session_id)
+            token = db.scalar(select(RefreshToken.id).where(
+                RefreshToken.id == token_id, RefreshToken.session_id == session_id,
+                RefreshToken.token_digest == digest,
+            ).with_for_update())
+            if token is None or session.revoked_at is not None:
+                return False
+            now = self._now(db)
+            if now < _utc(session.created_at, db):
+                raise SessionAuthenticationError()
+            session.revoked_at = now
+            return True
+
+        return self._transaction(operation)
+
+    def revoke_all_sessions(self, user_id: uuid.UUID) -> int:
+        user_id = _require_uuid(user_id)
+
+        def operation(db: Session) -> int:
+            self._active_user(self._lock_user(db, user_id))
+            now = self._now(db)
+            return self._revoke_all_session_records(db, user_id, now)
+
+        return self._transaction(operation)
+
+    @staticmethod
+    def _revoke_all_session_records(db: Session, user_id: uuid.UUID, now: datetime) -> int:
+        result = db.execute(update(AuthSession).where(
+            AuthSession.user_id == user_id, AuthSession.revoked_at.is_(None),
+            AuthSession.expires_at > now,
+        ).values(revoked_at=now).execution_options(synchronize_session=False))
+        # Expiry is evaluated by the database, not against cached ORM timestamps
+        # (SQLite strips tzinfo). No ORM state is returned; commit expires it.
+        return result.rowcount
+
+    def revoke_all_buyer_sessions(self, claims: AccessTokenClaims) -> None:
+        """Authorize and revoke atomically using the existing logout-all SQL.
+
+        User version update -> current session -> Buyer SHARE -> session update.
+        An authentication check in a prior transaction would permit revoked
+        credentials to revoke later sessions after waiting for the User lock.
+        """
+        if not isinstance(claims, AccessTokenClaims):
+            raise SessionAuthenticationError()
+        user_id = _require_uuid(claims.user_id)
+        session_id = _require_uuid(claims.session_id)
+
+        def operation(db: Session) -> None:
+            self._active_user(self._lock_user(db, user_id))
+            session = self._lock_session(db, user_id, session_id)
+            buyer = db.scalar(select(BuyerProfile.id).where(
+                BuyerProfile.user_id == user_id,
+            ).with_for_update(read=True))
+            if buyer is None:
+                raise SessionAuthenticationError()
+            # Sample time after every lock, including a potentially waiting
+            # Buyer lock. JWT verification happened before this transaction.
+            now = self._now(db)
+            self._active_session(db, session, now)
+            if claims.expires_at <= now:
+                raise SessionAuthenticationError()
+            self._revoke_all_session_records(db, user_id, now)
+
+        self._transaction(operation)

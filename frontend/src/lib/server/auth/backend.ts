@@ -97,7 +97,7 @@ export class BackendAuthClient {
             const error = z.object({ detail: z.object({ fields: z.array(z.string()).max(5).optional() }).passthrough() }).safeParse(body);
             const fields = error.success ? error.data.detail.fields ?? [] : [];
             const retry = response.headers.get('retry-after');
-            throw new BackendFailure([400,401,403,413,415,422,429,503].includes(response.status) ? response.status : 502,
+            throw new BackendFailure([400,401,403,409,413,415,422,429,503].includes(response.status) ? response.status : 502,
               retry && /^\d{1,5}$/.test(retry) ? retry : undefined, fields);
           }
           if (response.status !== ((path === '/logout' || path === '/vendor/enroll' || path === '/phone/verify-code' || path === '/vendor/verification/submit') ? 204 : (path.endsWith('/signup') || path === '/phone/send-code') ? 202 : 200)) throw new BackendFailure();

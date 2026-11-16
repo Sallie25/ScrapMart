@@ -1,6 +1,6 @@
 import 'server-only';
 import { BackendAuthClient, BackendFailure, boundedJson, exactHttpsOrigin } from './backend';
-import { buyerRegistration, vendorRegistration, login, acknowledgment, safeFields } from './contracts';
+import { buyerRegistration, vendorRegistration, vendorEnrollment, login, acknowledgment, safeFields } from './contracts';
 import type { Role } from './contracts';
 import { hashIdentifier } from '../sessions/crypto';
 import { browserSessionCookie } from '../sessions/index';
@@ -47,8 +47,9 @@ export function createBffHandlers(dependencies?: { store: SessionStore; backend:
     const path = operation.join('/');
     const registration = path === 'buyer/signup' || path === 'vendor/signup';
     const signingIn = path === 'buyer/login' || path === 'vendor/login';
+    const enrolling = path === 'vendor/enroll';
     const read = path === 'session' || path === 'vendor/status';
-    if (!registration && !signingIn && !read && path !== 'refresh' && path !== 'logout') return authError(404, 'not_found');
+    if (!registration && !signingIn && !enrolling && !read && path !== 'refresh' && path !== 'logout') return authError(404, 'not_found');
     if (request.method !== (read ? 'GET' : 'POST')) return authError(405, 'method_not_allowed');
     if (!dependencies || !origin) return authError(503, 'authentication_disabled');
     const { store, backend } = dependencies;
@@ -58,7 +59,7 @@ export function createBffHandlers(dependencies?: { store: SessionStore; backend:
       return authError(403, 'origin_or_csrf_rejected');
     }
     try {
-      if (!read && !registration && !signingIn && request.body) {
+      if (!read && !registration && !signingIn && !enrolling && request.body) {
         void request.body.cancel().catch(() => {});
         return authError(400, 'body_not_allowed');
       }
@@ -102,6 +103,24 @@ export function createBffHandlers(dependencies?: { store: SessionStore; backend:
       if (!id) return cookie(authError(401, 'session_required'));
       const metadata = await store.lookup(id); // Any storage error propagates as 503.
       if (!metadata) return cookie(authError(401, 'session_required'));
+      if (enrolling) {
+        if (request.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() !== 'application/json')
+          return authError(415, 'json_required');
+        const input = await boundedJson(request.body, AbortSignal.any([request.signal, AbortSignal.timeout(5000)]));
+        const parsed = vendorEnrollment.safeParse(input);
+        if (!parsed.success) return authError(422, 'validation_error', parsed.error.issues
+          .map(issue => String(issue.path[0])).filter(field => safeFields.includes(field) || field === 'current_password'));
+        try {
+          return await store.withAccess(id, async access => {
+            await backend.enrollVendor(access, parsed.data);
+            return response(null, 204);
+          });
+        } catch (error) {
+          if (error instanceof SessionAccessExpired) return authError(401, 'session_refresh_required');
+          if (error instanceof BackendFailure && error.status === 401) return authError(401, 'session_refresh_required');
+          return backendError(error);
+        }
+      }
       if (path === 'refresh') {
         let invalidBackendSession = false;
         try {

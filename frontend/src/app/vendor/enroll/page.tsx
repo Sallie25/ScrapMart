@@ -46,7 +46,10 @@ export default function VendorEnrollPage() {
         </button>
       </form>
       {message && <p className="mt-4" role="status">{message}</p>}
-      <Link className="mt-5 inline-block underline" href="/login?role=buyer">Sign in as buyer</Link>
+      <div className="mt-5 flex flex-wrap gap-4">
+        <Link className="underline" href="/login?role=buyer">Sign in as buyer</Link>
+        <Link className="underline" href="/vendor/verification">Continue to vendor verification</Link>
+      </div>
     </main>
   );
 }

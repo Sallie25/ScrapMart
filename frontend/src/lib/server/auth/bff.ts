@@ -54,18 +54,21 @@ export function createBffHandlers(dependencies?: { store: SessionStore; backend:
     const phoneSend = path === 'phone/send-code';
     const phoneVerify = path === 'phone/verify-code';
     const reviewSubmission = path === 'vendor/verification/submit';
+    const reviewQueue = path === 'verification/cases';
+    const reviewDetail = operation.length === 3 && operation[0] === 'verification' && operation[1] === 'cases' && /^[0-9a-fA-F-]{36}$/.test(operation[2]);
+    const reviewerRead = reviewQueue || reviewDetail;
     const read = path === 'session' || path === 'vendor/status';
-    if (!registration && !signingIn && !enrolling && !onboarding && !identityUpload && !phoneSend && !phoneVerify && !reviewSubmission && !read && path !== 'refresh' && path !== 'logout') return authError(404, 'not_found');
-    if (onboarding ? !['GET', 'PATCH'].includes(request.method) : request.method !== (read ? 'GET' : 'POST')) return authError(405, 'method_not_allowed');
+    if (!registration && !signingIn && !enrolling && !onboarding && !identityUpload && !phoneSend && !phoneVerify && !reviewSubmission && !reviewerRead && !read && path !== 'refresh' && path !== 'logout') return authError(404, 'not_found');
+    if (onboarding ? !['GET', 'PATCH'].includes(request.method) : request.method !== (read || reviewerRead ? 'GET' : 'POST')) return authError(405, 'method_not_allowed');
     if (!dependencies || !origin) return authError(503, 'authentication_disabled');
     const { store, backend } = dependencies;
-    if (!read && !(onboarding && request.method === 'GET') && (request.headers.get('origin') !== origin || new URL(request.url).origin !== origin ||
+    if (!read && !reviewerRead && !(onboarding && request.method === 'GET') && (request.headers.get('origin') !== origin || new URL(request.url).origin !== origin ||
         request.headers.get('x-scrapmart-csrf') !== '1' ||
         (request.headers.has('sec-fetch-site') && request.headers.get('sec-fetch-site') !== 'same-origin'))) {
       return authError(403, 'origin_or_csrf_rejected');
     }
     try {
-      if (!read && !registration && !signingIn && !enrolling && !onboarding && !identityUpload && !phoneSend && !phoneVerify && !reviewSubmission && request.body) {
+      if (!read && !registration && !signingIn && !enrolling && !onboarding && !identityUpload && !phoneSend && !phoneVerify && !reviewSubmission && !reviewerRead && request.body) {
         void request.body.cancel().catch(() => {});
         return authError(400, 'body_not_allowed');
       }
@@ -109,6 +112,35 @@ export function createBffHandlers(dependencies?: { store: SessionStore; backend:
       if (!id) return cookie(authError(401, 'session_required'));
       const metadata = await store.lookup(id); // Any storage error propagates as 503.
       if (!metadata) return cookie(authError(401, 'session_required'));
+      if (reviewerRead) {
+        let status: 'pending' | 'approved' | 'rejected' | 'suspended' = 'pending';
+        let limit = 25;
+        const params = new URL(request.url).searchParams;
+        if (reviewQueue) {
+          if ([...params.keys()].some(key => key !== 'status' && key !== 'limit') ||
+              params.getAll('status').length > 1 || params.getAll('limit').length > 1)
+            return authError(422, 'validation_error');
+          const suppliedStatus = params.get('status') ?? 'pending';
+          if (!['pending', 'approved', 'rejected', 'suspended'].includes(suppliedStatus))
+            return authError(422, 'validation_error');
+          status = suppliedStatus as typeof status;
+          if (params.has('limit')) {
+            const input = params.get('limit') ?? '';
+            if (!/^[1-9][0-9]?$/.test(input) || Number(input) > 25) return authError(422, 'validation_error');
+            limit = Number(input);
+          }
+        } else if ([...params.keys()].length) return authError(422, 'validation_error');
+        try {
+          return await store.withAccess(id, async access => response(
+            reviewQueue ? await backend.reviewCases(access, status, limit) :
+              await backend.reviewCase(access, operation[2])
+          ));
+        } catch (error) {
+          if (error instanceof SessionAccessExpired) return authError(401, 'session_refresh_required');
+          if (error instanceof BackendFailure && error.status === 401) return authError(401, 'session_refresh_required');
+          return backendError(error);
+        }
+      }
       if (reviewSubmission) {
         if (request.headers.get('content-type')?.split(';', 1)[0].trim().toLowerCase() !== 'application/json')
           return authError(415, 'json_required');

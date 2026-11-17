@@ -9,7 +9,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { AuthField } from "@/components/auth/auth-field";
-import { AuthIcon } from "@/components/auth/auth-icon";
 import {
   buyerSignupSchema,
   vendorSignupSchema,
@@ -35,7 +34,7 @@ export function SignupForm({ role }: { role: "buyer" | "vendor" }) {
       password: "",
       previewConsent: false,
       ...(vendor
-        ? { businessName: "", businessLocation: "", businessAddress: "" }
+        ? { businessName: "" }
         : {}),
     },
   });
@@ -138,57 +137,6 @@ export function SignupForm({ role }: { role: "buyer" | "vendor" }) {
               error={fieldError("businessName")}
               {...register("businessName")}
             />
-            <AuthField
-              id="signup-business-location"
-              label="Shop location (complete after sign-in)"
-              placeholder="Complete in Vendor profile"
-              autoComplete="address-level2"
-              disabled
-              error={fieldError("businessLocation")}
-              {...register("businessLocation")}
-            />
-            <div className="md:col-span-2">
-              <AuthField
-                id="signup-business-address"
-                label="Shop address (complete after sign-in)"
-                placeholder="Complete in Vendor profile"
-                autoComplete="street-address"
-                disabled
-                error={fieldError("businessAddress")}
-                {...register("businessAddress")}
-              />
-            </div>
-            <div>
-              <label htmlFor="identification-type" className="mb-2 block">
-                Identification type
-              </label>
-              <select
-                id="identification-type"
-                disabled
-                aria-describedby="identity-demo"
-              >
-                <option>National ID</option>
-                <option>Driver&apos;s Licence</option>
-                <option>International Passport</option>
-                <option>Voter&apos;s Card</option>
-              </select>
-            </div>
-            <div>
-              <label htmlFor="identification-document" className="mb-2 block">
-                Identification upload
-              </label>
-              <label className="auth-upload flex min-h-12 items-center gap-3 rounded-xl px-4 opacity-65">
-                <AuthIcon name="upload" />
-                <span>Upload unavailable</span>
-                <input
-                  id="identification-document"
-                  type="file"
-                  className="sr-only"
-                  disabled
-                  aria-describedby="identity-demo"
-                />
-              </label>
-            </div>
           </>
         )}
       </div>

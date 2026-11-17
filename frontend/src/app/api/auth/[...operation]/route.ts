@@ -13,6 +13,8 @@ export async function POST(request: Request, context: Context) {
 const denied = () => authError(405, 'method_not_allowed');
 export const OPTIONS = denied;
 export const PUT = denied;
-export const PATCH = denied;
+export async function PATCH(request: Request, context: Context) {
+  return handleAuthentication(request, (await context.params).operation);
+}
 export const DELETE = denied;
 export const HEAD = () => new Response(null, { status: 405, headers: { 'Cache-Control': 'no-store' } });
